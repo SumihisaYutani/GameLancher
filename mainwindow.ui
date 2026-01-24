@@ -1,0 +1,763 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1000</width>
+    <height>700</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <family>Segoe UI</family>
+    <pointsize>9</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>Game Launcher</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>:/icons/launcher.ico</normaloff>:/icons/launcher.ico</iconset>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">QMainWindow {
+    background-color: rgb(30, 30, 30);
+}
+
+QWidget {
+    font-family: &quot;Segoe UI&quot;, &quot;Arial&quot;, &quot;Yu Gothic UI&quot;, sans-serif;
+    font-size: 9pt;
+    color: #333333;
+}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <property name="spacing">
+     <number>10</number>
+    </property>
+    <property name="leftMargin">
+     <number>10</number>
+    </property>
+    <property name="topMargin">
+     <number>10</number>
+    </property>
+    <property name="rightMargin">
+     <number>10</number>
+    </property>
+    <property name="bottomMargin">
+     <number>10</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="toolbarFrame">
+      <property name="styleSheet">
+       <string>QFrame#toolbarFrame {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: 0 2px 4px rgba(0,120,212,0.1);
+}
+
+QPushButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 5px;
+    padding: 8px 16px;
+    font-weight: 500;
+    font-size: 9pt;
+    color: #1565c0;
+    min-height: 20px;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #e3f2fd, stop: 1 #bbdefb);
+    border-color: #2196f3;
+    color: #0d47a1;
+}
+
+QPushButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #bbdefb, stop: 1 #90caf9);
+    border-color: #1976d2;
+    color: #0d47a1;
+}
+
+QPushButton:disabled {
+    background-color: #f5f5f5;
+    color: #999999;
+    border-color: #d5d5d5;
+}
+
+QPushButton#addAppButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #4caf50, stop: 1 #388e3c);
+    border-color: #2e7d32;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#addAppButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #66bb6a, stop: 1 #4caf50);
+    border-color: #1b5e20;
+}
+
+QPushButton#addAppButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #388e3c, stop: 1 #2e7d32);
+    border-color: #1b5e20;
+}
+
+QPushButton#settingsButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #ff9800, stop: 1 #f57c00);
+    border-color: #e65100;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#settingsButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #ffb74d, stop: 1 #ff9800);
+    border-color: #bf360c;
+}
+
+QToolButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 5px;
+    padding: 8px 12px;
+    font-weight: 500;
+    font-size: 9pt;
+    color: #1565c0;
+    min-height: 20px;
+}
+
+QToolButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #e3f2fd, stop: 1 #bbdefb);
+    border-color: #2196f3;
+    color: #0d47a1;
+}
+
+QToolButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #bbdefb, stop: 1 #90caf9);
+    border-color: #1976d2;
+    color: #0d47a1;
+}
+
+QLineEdit {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 9pt;
+    color: #333333;
+    selection-background-color: #2196f3;
+    selection-color: #ffffff;
+}
+
+QLineEdit:focus {
+    border-color: #2196f3;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #f3f9ff, stop: 1 #e8f4fd);
+    outline: none;
+    box-shadow: 0 2px 4px rgba(33,150,243,0.2);
+}
+
+QLineEdit:hover {
+    border-color: #64b5f6;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #fafcff, stop: 1 #f0f7ff);
+}</string>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::Shape::StyledPanel</enum>
+      </property>
+      <layout class="QHBoxLayout" name="toolbarLayout">
+       <item>
+        <widget class="QPushButton" name="addAppButton">
+         <property name="text">
+          <string>アプリを追加</string>
+         </property>
+         <property name="icon">
+          <iconset>
+           <normaloff>:/icons/add.png</normaloff>:/icons/add.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>24</width>
+           <height>24</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="removeAppButton">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="text">
+          <string>削除</string>
+         </property>
+         <property name="icon">
+          <iconset>
+           <normaloff>:/icons/remove.png</normaloff>:/icons/remove.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>24</width>
+           <height>24</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QToolButton" name="viewModeButton">
+         <property name="text">
+          <string>表示切替</string>
+         </property>
+         <property name="icon">
+          <iconset>
+           <normaloff>:/icons/grid.png</normaloff>:/icons/grid.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>24</width>
+           <height>24</height>
+          </size>
+         </property>
+         <property name="popupMode">
+          <enum>QToolButton::ToolButtonPopupMode::MenuButtonPopup</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLineEdit" name="searchLineEdit">
+         <property name="maxLength">
+          <number>50</number>
+         </property>
+         <property name="placeholderText">
+          <string>アプリを検索...</string>
+         </property>
+         <property name="clearButtonEnabled">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="settingsButton">
+         <property name="text">
+          <string>設定</string>
+         </property>
+         <property name="icon">
+          <iconset>
+           <normaloff>:/icons/settings.png</normaloff>:/icons/settings.png</iconset>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>24</width>
+           <height>24</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QStackedWidget" name="viewStackedWidget">
+      <property name="styleSheet">
+       <string>QStackedWidget {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                               stop: 0 #ffffff, stop: 0.5 #fafcff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,120,212,0.05);
+}</string>
+      </property>
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="gridViewPage">
+       <layout class="QVBoxLayout" name="gridViewLayout">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QScrollArea" name="gridScrollArea">
+          <property name="styleSheet">
+           <string>QScrollArea {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: none;
+    border-radius: 4px;
+}
+
+QScrollBar:vertical {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #f0f7ff, stop: 1 #e8f4fd);
+    width: 16px;
+    border: 1px solid #e1f0ff;
+    border-radius: 8px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #90caf9, stop: 1 #64b5f6);
+    border: none;
+    border-radius: 8px;
+    min-height: 20px;
+    margin: 2px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #64b5f6, stop: 1 #42a5f5);
+}
+
+QScrollBar::handle:vertical:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #42a5f5, stop: 1 #2196f3);
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
+}</string>
+          </property>
+          <property name="horizontalScrollBarPolicy">
+           <enum>Qt::ScrollBarPolicy::ScrollBarAlwaysOff</enum>
+          </property>
+          <property name="widgetResizable">
+           <bool>true</bool>
+          </property>
+          <widget class="QWidget" name="gridScrollAreaWidgetContents">
+           <property name="geometry">
+            <rect>
+             <x>0</x>
+             <y>0</y>
+             <width>978</width>
+             <height>527</height>
+            </rect>
+           </property>
+           <layout class="QGridLayout" name="gridLayout">
+            <property name="spacing">
+             <number>15</number>
+            </property>
+           </layout>
+          </widget>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="listViewPage">
+       <layout class="QVBoxLayout" name="listViewLayout">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QTreeWidget" name="listTreeWidget">
+          <property name="styleSheet">
+           <string>QTreeWidget {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    font-size: 9pt;
+    alternate-background-color: #f0f7ff;
+    selection-background-color: #2196f3;
+    selection-color: #ffffff;
+    gridline-color: #d0e7ff;
+    color: #333333;
+}
+
+QTreeWidget::item {
+    padding: 8px;
+    border-bottom: 1px solid #e1f0ff;
+    color: #333333;
+}
+
+QTreeWidget::item:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #e8f4fd, stop: 1 #e1f0ff);
+    color: #1565c0;
+}
+
+QTreeWidget::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #2196f3, stop: 1 #1976d2);
+    color: #ffffff;
+}
+
+QHeaderView::section {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #f0f7ff, stop: 1 #e8f4fd);
+    border: 1px solid #b3d9ff;
+    border-left: none;
+    padding: 8px 12px;
+    font-weight: 600;
+    font-size: 9pt;
+    color: #1565c0;
+}
+
+QHeaderView::section:first {
+    border-left: 1px solid #b3d9ff;
+}
+
+QHeaderView::section:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #e8f4fd, stop: 1 #d0e7ff);
+    color: #0d47a1;
+}</string>
+          </property>
+          <property name="rootIsDecorated">
+           <bool>false</bool>
+          </property>
+          <property name="sortingEnabled">
+           <bool>true</bool>
+          </property>
+          <property name="columnCount">
+           <number>4</number>
+          </property>
+          <column>
+           <property name="text">
+            <string>アプリ名</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>パス</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>最終起動</string>
+           </property>
+          </column>
+          <column>
+           <property name="text">
+            <string>起動回数</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1000</width>
+     <height>31</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string>QMenuBar {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #f0f7ff, stop: 1 #e8f4fd);
+    border-bottom: 1px solid #b3d9ff;
+    color: #333333;
+    font-weight: normal;
+    font-size: 9pt;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 6px 12px;
+    border-radius: 3px;
+    margin: 1px;
+    color: #1565c0;
+}
+
+QMenuBar::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #e3f2fd, stop: 1 #bbdefb);
+    color: #0d47a1;
+}
+
+QMenu {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+                               stop: 0 #ffffff, stop: 1 #f8fbff);
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    padding: 4px;
+    font-size: 9pt;
+    box-shadow: 0 2px 8px rgba(33,150,243,0.15);
+}
+
+QMenu::item {
+    padding: 6px 12px;
+    border-radius: 3px;
+    margin: 1px;
+    color: #333333;
+}
+
+QMenu::item:selected {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #2196f3, stop: 1 #1976d2);
+    color: #ffffff;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #d0e7ff, stop: 1 #b3d9ff);
+    margin: 4px 8px;
+}</string>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>ファイル(&amp;F)</string>
+    </property>
+    <addaction name="actionAddApp"/>
+    <addaction name="separator"/>
+    <addaction name="actionExit"/>
+   </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>表示(&amp;V)</string>
+    </property>
+    <addaction name="actionGridView"/>
+    <addaction name="actionListView"/>
+    <addaction name="separator"/>
+    <addaction name="actionRefresh"/>
+   </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>ヘルプ(&amp;H)</string>
+    </property>
+    <addaction name="actionAbout"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuView"/>
+   <addaction name="menuHelp"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar">
+   <property name="minimumSize">
+    <size>
+     <width>0</width>
+     <height>36</height>
+    </size>
+   </property>
+   <property name="maximumSize">
+    <size>
+     <width>16777215</width>
+     <height>36</height>
+    </size>
+   </property>
+   <property name="styleSheet">
+    <string>QStatusBar {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                               stop: 0 #f0f7ff, stop: 1 #e8f4fd);
+    border-top: 1px solid #b3d9ff;
+    color: #666666;
+    font-weight: normal;
+    min-height: 35px;
+    max-height: 35px;
+}
+
+QStatusBar::item {
+    border: none;
+    margin: 0 8px;
+}</string>
+   </property>
+   <widget class="QLabel" name="appCountLabel">
+    <property name="geometry">
+     <rect>
+      <x>15</x>
+      <y>6</y>
+      <width>180</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>QLabel {
+    color: #666666;
+    font-weight: normal;
+    font-size: 9pt;
+    padding: 2px 8px;
+}</string>
+    </property>
+    <property name="text">
+     <string>登録アプリ: 0個</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lastLaunchLabel">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>6</y>
+      <width>300</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>QLabel {
+    color: #999999;
+    font-weight: normal;
+    font-size: 9pt;
+    padding: 2px 8px;
+}</string>
+    </property>
+    <property name="text">
+     <string>最終起動: なし</string>
+    </property>
+   </widget>
+   <widget class="QProgressBar" name="loadingProgressBar">
+    <property name="geometry">
+     <rect>
+      <x>750</x>
+      <y>7</y>
+      <width>220</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="visible">
+     <bool>false</bool>
+    </property>
+    <property name="styleSheet">
+     <string>QProgressBar {
+    border: 1px solid #b3d9ff;
+    border-radius: 4px;
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #f0f7ff, stop: 1 #e8f4fd);
+    text-align: center;
+    font-size: 9pt;
+    color: #1565c0;
+    height: 18px;
+}
+
+QProgressBar::chunk {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+                               stop: 0 #42a5f5, stop: 1 #2196f3);
+    border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(33,150,243,0.3);
+}</string>
+    </property>
+   </widget>
+  </widget>
+  <action name="actionAddApp">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/add.png</normaloff>:/icons/add.png</iconset>
+   </property>
+   <property name="text">
+    <string>アプリを追加(&amp;A)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+N</string>
+   </property>
+  </action>
+  <action name="actionExit">
+   <property name="text">
+    <string>終了(&amp;X)</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="actionGridView">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/grid.png</normaloff>:/icons/grid.png</iconset>
+   </property>
+   <property name="text">
+    <string>グリッド表示(&amp;G)</string>
+   </property>
+  </action>
+  <action name="actionListView">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/list.png</normaloff>:/icons/list.png</iconset>
+   </property>
+   <property name="text">
+    <string>リスト表示(&amp;L)</string>
+   </property>
+  </action>
+  <action name="actionRefresh">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/refresh.png</normaloff>:/icons/refresh.png</iconset>
+   </property>
+   <property name="text">
+    <string>更新(&amp;R)</string>
+   </property>
+   <property name="shortcut">
+    <string>F5</string>
+   </property>
+  </action>
+  <action name="actionAbout">
+   <property name="text">
+    <string>Game Launcherについて(&amp;A)</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
