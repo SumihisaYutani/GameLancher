@@ -11,16 +11,18 @@
 #include <QFormLayout>
 #include <QFileDialog>
 #include <QGroupBox>
+#include <QComboBox>
 #include "appinfo.h"
 #include "iconextractor.h"
+#include "categorymanager.h"
 
 class AddAppDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit AddAppDialog(QWidget *parent = nullptr);
-    explicit AddAppDialog(const AppInfo &app, QWidget *parent = nullptr);
+    explicit AddAppDialog(CategoryManager *categoryManager, QWidget *parent = nullptr);
+    explicit AddAppDialog(const AppInfo &app, CategoryManager *categoryManager, QWidget *parent = nullptr);
     ~AddAppDialog();
     
     // アプリケーション情報の取得/設定
@@ -47,12 +49,14 @@ private:
     void updateIconPreview();
     void extractAndSetIcon();
     void setDefaultAppName();
+    void updateCategoryComboBox();
     void showErrorMessage(const QString &message);
     
     // UI コンポーネント
     QLineEdit *m_nameLineEdit;
     QLineEdit *m_pathLineEdit;
     QPushButton *m_browseButton;
+    QComboBox *m_categoryComboBox;
     QLabel *m_iconLabel;
     QPushButton *m_changeIconButton;
     QTextEdit *m_descriptionTextEdit;
@@ -66,6 +70,7 @@ private:
     // データ
     AppInfo m_appInfo;
     IconExtractor *m_iconExtractor;
+    CategoryManager *m_categoryManager;
     bool m_editMode;
     QString m_customIconPath;
     

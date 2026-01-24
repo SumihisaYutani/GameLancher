@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include "appinfo.h"
+#include "categorymanager.h"
 
 class AppManager : public QObject
 {
@@ -25,7 +26,10 @@ public:
     // データ取得
     QList<AppInfo> getApps() const;
     QList<AppInfo> searchApps(const QString &keyword) const;
+    QList<AppInfo> getAppsByCategory(const QString &category) const;
+    QList<AppInfo> searchAppsInCategory(const QString &keyword, const QString &category) const;
     int getAppCount() const;
+    int getAppCountByCategory(const QString &category) const;
     
     // データ永続化
     bool loadApps();
@@ -34,6 +38,11 @@ public:
     // 統計
     AppInfo* getMostLaunchedApp();
     AppInfo* getRecentlyLaunchedApp();
+    
+    // カテゴリ管理
+    CategoryManager* getCategoryManager() const;
+    QStringList getUsedCategories() const;
+    void updateAppCategory(const QString &appId, const QString &category);
     
     // データファイル管理
     void setDataFilePath(const QString &filePath);
@@ -53,6 +62,7 @@ signals:
 private:
     QList<AppInfo> m_apps;
     QString m_dataFilePath;
+    CategoryManager *m_categoryManager;
     
     void initializeDataFile();
     QString getDefaultDataFilePath() const;

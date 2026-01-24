@@ -8,6 +8,7 @@
 
 AppManager::AppManager(QObject *parent)
     : QObject(parent)
+    , m_categoryManager(new CategoryManager(this))
 {
     m_dataFilePath = getDefaultDataFilePath();
     initializeDataFile();
@@ -106,9 +107,51 @@ QList<AppInfo> AppManager::searchApps(const QString &keyword) const
     return results;
 }
 
+QList<AppInfo> AppManager::getAppsByCategory(const QString &category) const
+{
+    if (category == "すべて" || category.isEmpty()) {
+        return m_apps;
+    }
+    
+    QList<AppInfo> results;
+    for (const auto &app : m_apps) {
+        if (app.category == category) {
+            results.append(app);
+        }
+    }
+    return results;
+}
+
+QList<AppInfo> AppManager::searchAppsInCategory(const QString &keyword, const QString &category) const
+{
+    QList<AppInfo> categoryApps = getAppsByCategory(category);
+    
+    if (keyword.isEmpty()) {
+        return categoryApps;
+    }
+    
+    QList<AppInfo> results;
+    QString lowerKeyword = keyword.toLower();
+    
+    for (const auto &app : categoryApps) {
+        if (app.name.toLower().contains(lowerKeyword) ||
+            app.description.toLower().contains(lowerKeyword) ||
+            app.path.toLower().contains(lowerKeyword)) {
+            results.append(app);
+        }
+    }
+    
+    return results;
+}
+
 int AppManager::getAppCount() const
 {
     return m_apps.size();
+}
+
+int AppManager::getAppCountByCategory(const QString &category) const
+{
+    return getAppsByCategory(category).size();
 }
 
 bool AppManager::loadApps()
@@ -129,6 +172,14 @@ bool AppManager::loadApps()
     }
     
     QJsonObject rootObj = doc.object();
+    
+    // カテゴリ情報の読み込み
+    if (rootObj.contains("categories")) {
+        QJsonObject categoryData;
+        categoryData["categories"] = rootObj["categories"];
+        m_categoryManager->fromJson(categoryData);
+    }
+    
     QJsonArray appsArray = rootObj["apps"].toArray();
     
     m_apps.clear();
@@ -159,6 +210,10 @@ bool AppManager::saveApps()
     rootObj["apps"] = appsArray;
     rootObj["version"] = "1.0";
     rootObj["lastModified"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+    
+    // カテゴリ情報も保存
+    QJsonObject categoryObj = m_categoryManager->toJson();
+    rootObj.insert("categories", categoryObj["categories"]);
     
     QJsonDocument doc(rootObj);
     
@@ -281,4 +336,30 @@ QString AppManager::getDefaultDataFilePath() const
         appDataDir = QApplication::applicationDirPath();
     }
     return QDir(appDataDir).filePath("apps.json");
+}
+
+CategoryManager* AppManager::getCategoryManager() const
+{
+    return m_categoryManager;
+}
+
+QStringList AppManager::getUsedCategories() const
+{
+    QStringList usedCategories;
+    for (const auto &app : m_apps) {
+        if (!usedCategories.contains(app.category)) {
+            usedCategories.append(app.category);
+        }
+    }
+    return usedCategories;
+}
+
+void AppManager::updateAppCategory(const QString &appId, const QString &category)
+{
+    AppInfo *app = findApp(appId);
+    if (app) {
+        app->category = category;
+        emit appUpdated(*app);
+        saveApps();
+    }
 }

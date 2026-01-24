@@ -127,7 +127,7 @@ void MainWindow::updateGridView()
     int col = 0;
     const int maxCols = 5; // 1行あたりの最大列数
     
-    for (const AppInfo &app : apps) {
+    for (const AppInfo &app : std::as_const(apps)) {
         AppWidget *appWidget = new AppWidget(app, gridWidget);
         
         // シグナル接続
@@ -166,7 +166,7 @@ void MainWindow::updateListView()
     }
     
     // リストアイテムの作成
-    for (const AppInfo &app : apps) {
+    for (const AppInfo &app : std::as_const(apps)) {
         QTreeWidgetItem *item = new QTreeWidgetItem(ui->listTreeWidget);
         item->setData(0, Qt::UserRole, app.id);
         item->setText(0, app.name);
@@ -192,7 +192,7 @@ void MainWindow::updateListView()
 void MainWindow::clearGridView()
 {
     // 既存のウィジェットを削除
-    for (AppWidget *widget : m_appWidgets) {
+    for (AppWidget *widget : std::as_const(m_appWidgets)) {
         delete widget;
     }
     m_appWidgets.clear();
@@ -263,7 +263,7 @@ bool MainWindow::launchApplication(const QString &appId)
 void MainWindow::onAddAppButtonClicked()
 {
     qDebug() << "Add app button clicked";
-    AddAppDialog dialog(this);
+    AddAppDialog dialog(m_appManager->getCategoryManager(), this);
     if (dialog.exec() == QDialog::Accepted) {
         AppInfo newApp = dialog.getAppInfo();
         qDebug() << "Dialog accepted, app info:" << newApp.name << newApp.path;
@@ -316,7 +316,7 @@ void MainWindow::onAppWidgetClicked(const QString &appId)
     ui->removeAppButton->setEnabled(!appId.isEmpty());
     
     // 他のウィジェットの選択を解除
-    for (AppWidget *widget : m_appWidgets) {
+    for (AppWidget *widget : std::as_const(m_appWidgets)) {
         widget->setSelected(widget->getAppInfo().id == appId);
     }
 }
@@ -413,7 +413,7 @@ void MainWindow::onAppLaunchError(const QString &appId, const QString &error)
 {
     AppInfo *app = m_appManager->findApp(appId);
     if (app) {
-        QString message = QString("起動エラー: %1 - %2").arg(app->name).arg(error);
+        QString message = QString("起動エラー: %1 - %2").arg(app->name, error);
         QMessageBox::warning(this, "起動エラー", message);
     }
 }
@@ -460,8 +460,7 @@ void MainWindow::updateStatusBar()
     AppInfo *recentApp = m_appManager->getRecentlyLaunchedApp();
     if (recentApp) {
         QString lastLaunchText = QString("最終起動: %1 (%2)")
-                                .arg(recentApp->name)
-                                .arg(formatLastLaunch(recentApp->lastLaunch));
+                                .arg(recentApp->name, formatLastLaunch(recentApp->lastLaunch));
         ui->lastLaunchLabel->setText(lastLaunchText);
     } else {
         ui->lastLaunchLabel->setText("最終起動: なし");
@@ -484,7 +483,7 @@ void MainWindow::editApplication(const QString &appId)
         return;
     }
     
-    AddAppDialog dialog(*app, this);
+    AddAppDialog dialog(*app, m_appManager->getCategoryManager(), this);
     dialog.setEditMode(true);
     
     if (dialog.exec() == QDialog::Accepted) {
@@ -536,12 +535,12 @@ void MainWindow::showAppProperties(const QString &appId)
         "<p><b>起動回数:</b> %4回</p>"
         "<p><b>最終起動:</b> %5</p>"
         "<p><b>説明:</b> %6</p>"
-    ).arg(app->name)
-     .arg(app->path)
-     .arg(app->createdAt.toString("yyyy/MM/dd hh:mm"))
-     .arg(app->launchCount)
-     .arg(formatLastLaunch(app->lastLaunch))
-     .arg(app->description.isEmpty() ? "なし" : app->description);
+    ).arg(app->name,
+          app->path,
+          app->createdAt.toString("yyyy/MM/dd hh:mm"),
+          QString::number(app->launchCount),
+          formatLastLaunch(app->lastLaunch),
+          app->description.isEmpty() ? "なし" : app->description);
     
     QMessageBox::information(this, "アプリケーションのプロパティ", properties);
 }

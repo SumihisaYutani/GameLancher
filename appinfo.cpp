@@ -5,6 +5,7 @@
 AppInfo::AppInfo()
     : launchCount(0)
     , createdAt(QDateTime::currentDateTime())
+    , category("その他")
 {
     id = QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
@@ -14,6 +15,7 @@ AppInfo::AppInfo(const QString &name, const QString &path)
     , path(path)
     , launchCount(0)
     , createdAt(QDateTime::currentDateTime())
+    , category("その他")
 {
     id = QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
@@ -29,6 +31,7 @@ QJsonObject AppInfo::toJson() const
     obj["launchCount"] = launchCount;
     obj["description"] = description;
     obj["createdAt"] = createdAt.toString(Qt::ISODate);
+    obj["category"] = category;
     return obj;
 }
 
@@ -40,6 +43,12 @@ void AppInfo::fromJson(const QJsonObject &json)
     iconPath = json["iconPath"].toString();
     launchCount = json["launchCount"].toInt();
     description = json["description"].toString();
+    category = json["category"].toString();
+    
+    // カテゴリが空の場合はデフォルト値を設定
+    if (category.isEmpty()) {
+        category = "その他";
+    }
     
     // 日時の読み込み（空文字列チェック）
     QString lastLaunchStr = json["lastLaunch"].toString();

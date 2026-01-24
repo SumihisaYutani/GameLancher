@@ -22,6 +22,7 @@ public:
     int launchCount;        // 起動回数
     QString description;    // 説明（任意）
     QDateTime createdAt;    // 作成日時
+    QString category;       // カテゴリ名
     
     // JSON変換
     QJsonObject toJson() const;

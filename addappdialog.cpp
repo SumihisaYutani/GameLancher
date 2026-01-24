@@ -14,9 +14,10 @@ const QStringList AddAppDialog::EXECUTABLE_FILTERS = {
     "すべてのファイル (*.*)"
 };
 
-AddAppDialog::AddAppDialog(QWidget *parent)
+AddAppDialog::AddAppDialog(CategoryManager *categoryManager, QWidget *parent)
     : QDialog(parent)
     , m_iconExtractor(new IconExtractor(this))
+    , m_categoryManager(categoryManager)
     , m_editMode(false)
 {
     setupUI();
@@ -24,10 +25,11 @@ AddAppDialog::AddAppDialog(QWidget *parent)
     setWindowTitle("アプリケーションの追加");
 }
 
-AddAppDialog::AddAppDialog(const AppInfo &app, QWidget *parent)
+AddAppDialog::AddAppDialog(const AppInfo &app, CategoryManager *categoryManager, QWidget *parent)
     : QDialog(parent)
     , m_appInfo(app)
     , m_iconExtractor(new IconExtractor(this))
+    , m_categoryManager(categoryManager)
     , m_editMode(true)
 {
     setupUI();
@@ -74,6 +76,12 @@ void AddAppDialog::setupUI()
     pathLayout->addWidget(m_pathLineEdit);
     pathLayout->addWidget(m_browseButton);
     basicLayout->addRow("パス(&P):", pathLayout);
+    
+    // カテゴリ選択
+    m_categoryComboBox = new QComboBox(this);
+    m_categoryComboBox->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    updateCategoryComboBox();
+    basicLayout->addRow("カテゴリ(&C):", m_categoryComboBox);
     
     mainLayout->addWidget(m_basicInfoGroup);
     
@@ -205,12 +213,13 @@ AppInfo AddAppDialog::getAppInfo() const
     info.name = m_nameLineEdit->text().trimmed();
     info.path = m_pathLineEdit->text().trimmed();
     info.description = m_descriptionTextEdit->toPlainText().trimmed();
+    info.category = m_categoryComboBox->currentText();
     
     if (!m_customIconPath.isEmpty()) {
         info.iconPath = m_customIconPath;
     }
     
-    qDebug() << "GetAppInfo - name:" << info.name << "path:" << info.path << "iconPath:" << info.iconPath;
+    qDebug() << "GetAppInfo - name:" << info.name << "path:" << info.path << "category:" << info.category << "iconPath:" << info.iconPath;
     
     return info;
 }
@@ -221,6 +230,18 @@ void AddAppDialog::setAppInfo(const AppInfo &app)
     m_nameLineEdit->setText(app.name);
     m_pathLineEdit->setText(app.path);
     m_descriptionTextEdit->setPlainText(app.description);
+    
+    // カテゴリの設定
+    int categoryIndex = m_categoryComboBox->findText(app.category);
+    if (categoryIndex >= 0) {
+        m_categoryComboBox->setCurrentIndex(categoryIndex);
+    } else {
+        // カテゴリが見つからない場合は "その他" を選択
+        int otherIndex = m_categoryComboBox->findText("その他");
+        if (otherIndex >= 0) {
+            m_categoryComboBox->setCurrentIndex(otherIndex);
+        }
+    }
     
     if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
         QPixmap iconPixmap(app.iconPath);
@@ -374,6 +395,35 @@ void AddAppDialog::setDefaultAppName()
             QString baseName = fileInfo.completeBaseName();
             m_nameLineEdit->setText(baseName);
         }
+    }
+}
+
+void AddAppDialog::updateCategoryComboBox()
+{
+    if (!m_categoryManager) {
+        m_categoryComboBox->addItem("その他");
+        return;
+    }
+    
+    m_categoryComboBox->clear();
+    QStringList categories = m_categoryManager->getCategories();
+    
+    // "すべて"を除外
+    categories.removeAll("すべて");
+    
+    for (const QString &category : categories) {
+        CategoryInfo info = m_categoryManager->getCategoryInfo(category);
+        QString displayText = category;
+        if (!info.icon.isEmpty()) {
+            displayText = info.icon + " " + category;
+        }
+        m_categoryComboBox->addItem(displayText, category);
+    }
+    
+    // デフォルトで "その他" を選択
+    int otherIndex = m_categoryComboBox->findData("その他");
+    if (otherIndex >= 0) {
+        m_categoryComboBox->setCurrentIndex(otherIndex);
     }
 }
 

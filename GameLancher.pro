@@ -19,7 +19,8 @@ SOURCES += \
     applauncher.cpp \
     iconextractor.cpp \
     addappdialog.cpp \
-    appwidget.cpp
+    appwidget.cpp \
+    categorymanager.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -28,7 +29,8 @@ HEADERS += \
     applauncher.h \
     iconextractor.h \
     addappdialog.h \
-    appwidget.h
+    appwidget.h \
+    categorymanager.h
 
 FORMS += \
     mainwindow.ui
