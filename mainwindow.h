@@ -5,6 +5,8 @@
 #include <QGridLayout>
 #include <QTreeWidgetItem>
 #include <QTimer>
+#include <QProgressBar>
+#include <QLabel>
 #include "appinfo.h"
 #include "appmanager.h"
 #include "applauncher.h"
@@ -38,6 +40,10 @@ private slots:
     void onViewModeButtonClicked();
     void onSearchTextChanged();
     void onFilterButtonClicked();
+    
+    // ロード関連
+    void onLoadingFinished();
+    void onLoadingProgress();
     
     // アプリ操作
     void onAppWidgetClicked(const QString &appId);
@@ -77,6 +83,11 @@ private slots:
 private:
     void setupConnections();
     void loadApplications();
+    void loadApplicationsAsync();
+    void setupProgressBar();
+    void showLoadingProgress();
+    void hideLoadingProgress();
+    void updateGridViewAsync(const QList<AppInfo> &apps);
     void refreshViews();
     void switchToGridView();
     void switchToListView();
@@ -117,6 +128,13 @@ private:
     // ステータスバータイマー
     QTimer *m_statusTimer;
     QTimer *m_resizeTimer;
+    
+    // プログレスバーとロード状態管理
+    QProgressBar *m_progressBar;
+    QLabel *m_loadingLabel;
+    QTimer *m_loadTimer;
+    QTimer *m_uiUpdateTimer;
+    bool m_isLoading;
 };
 
 #endif // MAINWINDOW_H

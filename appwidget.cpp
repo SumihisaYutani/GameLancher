@@ -11,6 +11,9 @@
 #include <QUrl>
 #include <QDir>
 #include <QProcess>
+#include <QElapsedTimer>
+#include <QDebug>
+#include <QTimer>
 
 const QSize AppWidget::DEFAULT_ICON_SIZE(48, 48);
 const QSize AppWidget::DEFAULT_WIDGET_SIZE(110, 130);
@@ -28,12 +31,27 @@ AppWidget::AppWidget(const AppInfo &app, QWidget *parent)
     , m_selected(false)
     , m_hovered(false)
 {
+    QElapsedTimer constructorTimer;
+    constructorTimer.start();
+    
+    QElapsedTimer setupTimer;
+    setupTimer.start();
     setupUI();
+    // qDebug() << "AppWidget setupUI took:" << setupTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
+    
+    setupTimer.restart();
     setupContextMenu();
+    // qDebug() << "AppWidget setupContextMenu took:" << setupTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
+    
+    setupTimer.restart();
+    // 通常通りアイコンも含めて更新
     updateAppInfo(app);
+    // qDebug() << "AppWidget updateAppInfo took:" << setupTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
     
     setMouseTracking(true);
     setAttribute(Qt::WA_Hover, true);
+    
+    // qDebug() << "AppWidget constructor TOTAL took:" << constructorTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
 }
 
 AppWidget::~AppWidget()
@@ -535,14 +553,22 @@ bool AppWidget::openFolderWithDesktopServices(const QString &folderPath)
 
 void AppWidget::updateIcon()
 {
+    QElapsedTimer iconTimer;
+    iconTimer.start();
+    
     QPixmap iconPixmap;
     
     // 1. アイコンファイルが存在する場合
+    QElapsedTimer step1Timer;
+    step1Timer.start();
     if (!m_appInfo.iconPath.isEmpty() && QFileInfo::exists(m_appInfo.iconPath)) {
         iconPixmap = QPixmap(m_appInfo.iconPath);
     }
+    // qDebug() << "Icon step 1 took:" << step1Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
     // 2. QFileIconProviderを使用してファイル固有アイコンを取得
+    QElapsedTimer step2Timer;
+    step2Timer.start();
     if (iconPixmap.isNull() && !m_appInfo.path.isEmpty() && QFileInfo::exists(m_appInfo.path)) {
         QFileIconProvider iconProvider;
         QFileInfo fileInfo(m_appInfo.path);
@@ -552,8 +578,11 @@ void AppWidget::updateIcon()
             // アイコン抽出成功
         }
     }
+    // qDebug() << "Icon step 2 (FileIconProvider) took:" << step2Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
     // 3. IconExtractorを使用してアイコンを抽出（プロセス内キャッシュ使用）
+    QElapsedTimer step3Timer;
+    step3Timer.start();
     if (iconPixmap.isNull() && !m_appInfo.path.isEmpty() && QFileInfo::exists(m_appInfo.path)) {
         // インスタンスキャッシュでアイコン抽出の重複を防ぐ
         QString cachePath = m_appInfo.path + "_" + QString::number(m_iconSize.width());
@@ -568,15 +597,21 @@ void AppWidget::updateIcon()
             }
         }
     }
+    // qDebug() << "Icon step 3 (IconExtractor) took:" << step3Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
     // 4. デフォルトアイコン
+    QElapsedTimer step4Timer;
+    step4Timer.start();
     if (iconPixmap.isNull()) {
         QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
         iconPixmap = defaultIcon.pixmap(m_iconSize);
         // デフォルトアイコン使用
     }
+    // qDebug() << "Icon step 4 (Default) took:" << step4Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
     // アイコンサイズに合わせてスケール
+    QElapsedTimer scaleTimer;
+    scaleTimer.start();
     if (!iconPixmap.isNull()) {
         QPixmap scaledPixmap = iconPixmap.scaled(m_iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         
@@ -596,7 +631,11 @@ void AppWidget::updateIcon()
         
         m_iconLabel->setPixmap(centeredPixmap);
     }
+    // qDebug() << "Icon scaling took:" << scaleTimer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
+    
+    // qDebug() << "updateIcon TOTAL took:" << iconTimer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
 }
+
 
 void AppWidget::updateLabels()
 {

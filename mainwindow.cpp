@@ -7,6 +7,9 @@
 #include <QApplication>
 #include <QResizeEvent>
 #include <QTimer>
+#include <QProgressBar>
+#include <QLabel>
+#include <QElapsedTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -19,9 +22,15 @@ MainWindow::MainWindow(QWidget *parent)
     , m_gridLayout(nullptr)
     , m_statusTimer(new QTimer(this))
     , m_resizeTimer(new QTimer(this))
+    , m_progressBar(nullptr)
+    , m_loadingLabel(nullptr)
+    , m_loadTimer(new QTimer(this))
+    , m_uiUpdateTimer(new QTimer(this))
+    , m_isLoading(false)
 {
     ui->setupUi(this);
     setupConnections();
+    setupProgressBar();
     
     // 初期状態の設定（ビュー設定のみ、再描画なし）
     m_isGridView = true;
@@ -29,8 +38,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionGridView->setChecked(true);
     ui->actionListView->setChecked(false);
     
-    // アプリケーションロードと初回描画（1回のみ）
-    loadApplications();
+    // アプリケーションロードと初回描画（非同期で実行）
+    loadApplicationsAsync();
     updateStatusBar();
     
     // ステータスバータイマーの設定
@@ -50,6 +59,50 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // タイマーを停止・削除
+    if (m_statusTimer) {
+        m_statusTimer->stop();
+        delete m_statusTimer;
+        m_statusTimer = nullptr;
+    }
+    
+    if (m_resizeTimer) {
+        m_resizeTimer->stop();
+        delete m_resizeTimer;
+        m_resizeTimer = nullptr;
+    }
+    
+    if (m_loadTimer) {
+        m_loadTimer->stop();
+        delete m_loadTimer;
+        m_loadTimer = nullptr;
+    }
+    
+    if (m_uiUpdateTimer) {
+        m_uiUpdateTimer->stop();
+        delete m_uiUpdateTimer;
+        m_uiUpdateTimer = nullptr;
+    }
+    
+    // AppWidgetのクリア
+    clearGridView();
+    
+    // コアコンポーネントの削除
+    if (m_appManager) {
+        delete m_appManager;
+        m_appManager = nullptr;
+    }
+    
+    if (m_appLauncher) {
+        delete m_appLauncher;
+        m_appLauncher = nullptr;
+    }
+    
+    if (m_iconExtractor) {
+        delete m_iconExtractor;
+        m_iconExtractor = nullptr;
+    }
+    
     delete ui;
 }
 
@@ -93,6 +146,10 @@ void MainWindow::setupConnections()
     connect(ui->actionListView, &QAction::triggered, this, &MainWindow::onActionListView);
     connect(ui->actionRefresh, &QAction::triggered, this, &MainWindow::onActionRefresh);
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::onActionAbout);
+    
+    // ロード関連の接続
+    connect(m_loadTimer, &QTimer::timeout, this, &MainWindow::onLoadingFinished);
+    connect(m_uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onLoadingProgress);
 }
 
 void MainWindow::loadApplications()
@@ -104,15 +161,23 @@ void MainWindow::loadApplications()
 
 void MainWindow::refreshViews()
 {
+    QElapsedTimer refreshTimer;
+    refreshTimer.start();
     qDebug() << "MainWindow::refreshViews - Refreshing views, current mode:" << (m_isGridView ? "Grid" : "List");
     
     if (m_isGridView) {
+        QElapsedTimer gridTimer;
+        gridTimer.start();
         updateGridView();
+        qDebug() << "updateGridView() took:" << gridTimer.elapsed() << "ms";
     } else {
+        QElapsedTimer listTimer;
+        listTimer.start();
         updateListView();
+        qDebug() << "updateListView() took:" << listTimer.elapsed() << "ms";
     }
     
-    qDebug() << "MainWindow::refreshViews - Views refreshed";
+    qDebug() << "MainWindow::refreshViews - Views refreshed in" << refreshTimer.elapsed() << "ms";
 }
 
 void MainWindow::switchToGridView()
@@ -135,6 +200,8 @@ void MainWindow::switchToListView()
 
 void MainWindow::updateGridView()
 {
+    if (m_isLoading) return; // ロード中は更新しない
+    
     clearGridView();
     
     // グリッドレイアウトの準備 - UIファイルで定義済みのレイアウトを使用
@@ -160,64 +227,18 @@ void MainWindow::updateGridView()
         apps = m_appManager->searchApps(m_currentFilter);
     }
     
-    // アプリウィジェットの作成と配置
-    int row = 0;
-    int col = 0;
-    
-    // ウィンドウ幅に基づいて動的に列数を計算
-    int availableWidth = gridWidget->width();
-    if (availableWidth <= 0) {
-        // スクロールエリアの幅を使用
-        availableWidth = ui->gridScrollArea->width() - 20; // スクロールバー分を考慮
+    if (apps.isEmpty()) {
+        return; // アプリがない場合は処理しない
     }
     
-    const int appWidgetWidth = 110; // AppWidgetのDEFAULT_WIDGET_SIZEの幅
-    const int gridSpacing = 8; // グリッドの間隔
-    const int gridMargin = 10; // グリッドのマージン
-    
-    int maxCols = qMax(1, (availableWidth - gridMargin * 2 + gridSpacing) / (appWidgetWidth + gridSpacing));
-    maxCols = qMin(maxCols, 15); // 最大15列に制限
-    
-    qDebug() << "Grid layout - Available width:" << availableWidth << "Calculated columns:" << maxCols;
-    
-    qDebug() << "Adding" << apps.size() << "apps to grid layout";
-    
-    for (const AppInfo &app : std::as_const(apps)) {
-        AppWidget *appWidget = new AppWidget(app, gridWidget);
-        
-        // シグナル接続
-        connect(appWidget, &AppWidget::clicked, this, &MainWindow::onAppWidgetClicked);
-        connect(appWidget, &AppWidget::doubleClicked, this, &MainWindow::onAppWidgetDoubleClicked);
-        // rightClickedは削除 - AppWidget独自のコンテキストメニューを使用
-        connect(appWidget, &AppWidget::editRequested, this, &MainWindow::onAppEditRequested);
-        connect(appWidget, &AppWidget::removeRequested, this, &MainWindow::onAppRemoveRequested);
-        connect(appWidget, &AppWidget::propertiesRequested, this, &MainWindow::onAppPropertiesRequested);
-        
-        // アプリウィジェット追加
-        m_gridLayout->addWidget(appWidget, row, col);
-        m_appWidgets.append(appWidget);
-        
-        col++;
-        if (col >= maxCols) {
-            col = 0;
-            row++;
-        }
-    }
-    
-    // レイアウトの調整
-    for (int i = col; i < maxCols; ++i) {
-        m_gridLayout->setColumnStretch(i, 1);
-    }
-    m_gridLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding), row + 1, 0);
-    
-    // レイアウトの更新を強制
-    gridWidget->updateGeometry();
-    gridWidget->update();
-    qDebug() << "Grid layout update completed. Total widgets:" << m_appWidgets.size();
+    // アプリウィジェットの作成と配置を段階的に実行
+    updateGridViewAsync(apps);
 }
 
 void MainWindow::updateListView()
 {
+    if (m_isLoading) return; // ロード中は更新しない
+    
     clearListView();
     
     // フィルタリング
@@ -226,9 +247,16 @@ void MainWindow::updateListView()
         apps = m_appManager->searchApps(m_currentFilter);
     }
     
-    // リストアイテムの作成
-    for (const AppInfo &app : std::as_const(apps)) {
-        QTreeWidgetItem *item = new QTreeWidgetItem(ui->listTreeWidget);
+    if (apps.isEmpty()) {
+        return;
+    }
+    
+    // 一括でアイテムを作成
+    QList<QTreeWidgetItem*> items;
+    items.reserve(apps.size());
+    
+    for (const AppInfo &app : apps) {
+        QTreeWidgetItem *item = new QTreeWidgetItem();
         item->setData(0, Qt::UserRole, app.id);
         item->setText(0, app.name);
         item->setText(1, app.path);
@@ -241,7 +269,12 @@ void MainWindow::updateListView()
         } else {
             item->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
         }
+        
+        items.append(item);
     }
+    
+    // 一括でツリーウィジェットに追加
+    ui->listTreeWidget->addTopLevelItems(items);
     
     // カラムサイズの調整
     ui->listTreeWidget->header()->resizeSection(0, 200);
@@ -668,6 +701,184 @@ void MainWindow::showAppProperties(const QString &appId)
     
     QMessageBox::information(this, "アプリケーションのプロパティ", properties);
 }
+
+void MainWindow::setupProgressBar()
+{
+    // プログレスバーをステータスバーに追加
+    m_progressBar = new QProgressBar(this);
+    m_progressBar->setVisible(false);
+    m_progressBar->setRange(0, 0); // インジケーター表示
+    m_progressBar->setMaximumHeight(16);
+    m_progressBar->setMaximumWidth(200);
+    
+    m_loadingLabel = new QLabel("アプリケーションを読み込み中...", this);
+    m_loadingLabel->setVisible(false);
+    
+    ui->statusbar->addPermanentWidget(m_loadingLabel);
+    ui->statusbar->addPermanentWidget(m_progressBar);
+}
+
+void MainWindow::showLoadingProgress()
+{
+    m_loadingLabel->setVisible(true);
+    m_progressBar->setVisible(true);
+    ui->statusbar->showMessage("初期化中...");
+}
+
+void MainWindow::hideLoadingProgress()
+{
+    m_loadingLabel->setVisible(false);
+    m_progressBar->setVisible(false);
+    ui->statusbar->clearMessage();
+}
+
+void MainWindow::loadApplicationsAsync()
+{
+    if (m_isLoading) return;
+    
+    m_isLoading = true;
+    showLoadingProgress();
+    
+    // まず最初の100個のみ表示して画面を早期表示
+    m_loadTimer->setSingleShot(true);
+    m_loadTimer->setInterval(10); // 10ms後に実行
+    m_loadTimer->start();
+}
+
+void MainWindow::onLoadingFinished()
+{
+    QElapsedTimer totalTimer;
+    totalTimer.start();
+    
+    qDebug() << "=== PERFORMANCE ANALYSIS START ===";
+    
+    // アプリケーションデータをロード
+    QElapsedTimer loadTimer;
+    loadTimer.start();
+    m_appManager->loadApps();
+    qDebug() << "AppManager::loadApps() took:" << loadTimer.elapsed() << "ms";
+    
+    m_uiUpdateTimer->stop();
+    hideLoadingProgress();
+    m_isLoading = false;
+    
+    // UIの更新を段階的に実行
+    QTimer::singleShot(50, this, [this, totalTimer]() mutable {
+        QElapsedTimer viewTimer;
+        viewTimer.start();
+        refreshViews();
+        qDebug() << "refreshViews() took:" << viewTimer.elapsed() << "ms";
+        qDebug() << "Total time so far:" << totalTimer.elapsed() << "ms";
+    });
+    
+    QTimer::singleShot(100, this, [this, totalTimer]() mutable {
+        QElapsedTimer countTimer;
+        countTimer.start();
+        updateAppCount();
+        qDebug() << "updateAppCount() took:" << countTimer.elapsed() << "ms";
+        qDebug() << "=== TOTAL TIME:" << totalTimer.elapsed() << "ms ===";
+    });
+}
+
+void MainWindow::onLoadingProgress()
+{
+    // プログレスバーのアニメーション（視覚的フィードバック）
+    static int counter = 0;
+    counter = (counter + 1) % 10;
+    
+    if (counter == 0) {
+        m_loadingLabel->setText("アプリケーションを読み込み中.");
+    } else if (counter == 3) {
+        m_loadingLabel->setText("アプリケーションを読み込み中..");
+    } else if (counter == 6) {
+        m_loadingLabel->setText("アプリケーションを読み込み中...");
+    }
+}
+
+void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
+{
+    QElapsedTimer asyncTimer;
+    asyncTimer.start();
+    
+    QWidget *gridWidget = ui->gridScrollAreaWidgetContents;
+    
+    // ウィンドウ幅に基づいて動的に列数を計算
+    int availableWidth = gridWidget->width();
+    if (availableWidth <= 0) {
+        availableWidth = ui->gridScrollArea->width() - 20;
+    }
+    
+    const int appWidgetWidth = 110;
+    const int gridSpacing = 8;
+    const int gridMargin = 10;
+    
+    int maxCols = qMax(1, (availableWidth - gridMargin * 2 + gridSpacing) / (appWidgetWidth + gridSpacing));
+    maxCols = qMin(maxCols, 15);
+    
+    qDebug() << "Grid layout - Available width:" << availableWidth << "Calculated columns:" << maxCols;
+    qDebug() << "Creating" << apps.size() << "app widgets for batch display";
+    
+    // シンプルな一括読み込み（安全のため段階的読み込みを無効化）
+    QElapsedTimer widgetCreationTimer;
+    widgetCreationTimer.start();
+    
+    QList<AppWidget*> newWidgets;
+    newWidgets.reserve(apps.size()); // 全アプリ数に合わせて予約
+    
+    // 制限解除: 全てのアプリを表示
+    int maxApps = apps.size(); // 制限なし
+    qDebug() << "FULL DISPLAY: Showing all" << maxApps << "apps";
+    
+    for (int i = 0; i < maxApps; ++i) {
+        const AppInfo &app = apps[i];
+        AppWidget *appWidget = new AppWidget(app, gridWidget);
+        
+        // シグナル接続
+        connect(appWidget, &AppWidget::clicked, this, &MainWindow::onAppWidgetClicked);
+        connect(appWidget, &AppWidget::doubleClicked, this, &MainWindow::onAppWidgetDoubleClicked);
+        connect(appWidget, &AppWidget::editRequested, this, &MainWindow::onAppEditRequested);
+        connect(appWidget, &AppWidget::removeRequested, this, &MainWindow::onAppRemoveRequested);
+        connect(appWidget, &AppWidget::propertiesRequested, this, &MainWindow::onAppPropertiesRequested);
+        
+        newWidgets.append(appWidget);
+    }
+    
+    qDebug() << "Widget creation took:" << widgetCreationTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
+    
+    // シンプルな同期レイアウト追加（安定化のため）
+    QElapsedTimer layoutTimer;
+    layoutTimer.start();
+    
+    // 全ウィジェットを一括でレイアウトに追加
+    for (int i = 0; i < newWidgets.size(); ++i) {
+        int row = i / maxCols;
+        int col = i % maxCols;
+        
+        AppWidget *appWidget = newWidgets[i];
+        m_gridLayout->addWidget(appWidget, row, col);
+        m_appWidgets.append(appWidget);
+    }
+    
+    qDebug() << "Layout addition took:" << layoutTimer.elapsed() << "ms";
+    
+    // レイアウトの調整
+    if (!newWidgets.isEmpty()) {
+        int lastRow = (newWidgets.size() - 1) / maxCols;
+        int lastCol = (newWidgets.size() - 1) % maxCols;
+        
+        for (int i = lastCol + 1; i < maxCols; ++i) {
+            m_gridLayout->setColumnStretch(i, 1);
+        }
+        m_gridLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding), lastRow + 1, 0);
+    }
+    
+    // 最終的なレイアウト更新
+    gridWidget->updateGeometry();
+    gridWidget->update();
+    
+    qDebug() << "updateGridViewAsync TOTAL took:" << asyncTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
+}
+
 
 AppWidget* MainWindow::findAppWidget(const QString &appId) const
 {

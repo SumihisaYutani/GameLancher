@@ -35,6 +35,7 @@ public:
     // サイズ設定
     void setFixedAppSize(const QSize &size);
     QSize sizeHint() const override;
+    
 
 signals:
     void clicked(const QString &appId);

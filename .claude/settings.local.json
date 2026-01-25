@@ -5,7 +5,16 @@
       "Bash(git checkout:*)",
       "Bash(qmake)",
       "Bash(make:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(dir:*)",
+      "Bash(./GameLancher.exe)",
+      "Read(//d/**)",
+      "Bash(.buildDesktop_Qt_6_10_0_MinGW_64_bit-DebugdebugGameLancher.exe)",
+      "Bash(\".\\build\\Desktop_Qt_6_10_0_MinGW_64_bit-Debug\\debug\\GameLancher.exe\")",
+      "Bash(\"D:\\ClaudeCode\\project\\GameLancher\\build\\Desktop_Qt_6_10_0_MinGW_64_bit-Debug\\debug\\GameLancher.exe\")",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c:*)",
+      "Bash(GameLancher.exe)"
     ],
     "deny": [],
     "ask": []
