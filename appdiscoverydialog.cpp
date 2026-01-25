@@ -64,7 +64,12 @@ void AppDiscoveryDialog::setupUI()
     ui->resultsTable->verticalHeader()->setDefaultSectionSize(56);
     
     // シグナル接続
-    connect(ui->browsePathButton, &QPushButton::clicked, this, &AppDiscoveryDialog::selectScanPath);
+    connect(ui->addPathButton, &QPushButton::clicked, this, &AppDiscoveryDialog::addPath);
+    connect(ui->removePathButton, &QPushButton::clicked, this, &AppDiscoveryDialog::removePath);
+    connect(ui->clearPathsButton, &QPushButton::clicked, this, &AppDiscoveryDialog::clearPaths);
+    connect(ui->customPathsListWidget, &QListWidget::itemSelectionChanged, this, [this]() {
+        ui->removePathButton->setEnabled(!ui->customPathsListWidget->selectedItems().isEmpty());
+    });
     connect(ui->startScanButton, &QPushButton::clicked, this, &AppDiscoveryDialog::startScan);
     connect(ui->stopScanButton, &QPushButton::clicked, this, &AppDiscoveryDialog::stopScan);
     
@@ -82,6 +87,9 @@ void AppDiscoveryDialog::setupUI()
     
     // 初期状態では結果タブを無効化
     ui->tabWidget->setTabEnabled(1, false);
+    
+    // 初期ボタン状態設定
+    updatePathButtonStates();
     
     // 除外リストとパターンを読み込み
     loadExcludeList();
@@ -120,11 +128,62 @@ void AppDiscoveryDialog::stopScan()
     m_appDiscovery->cancelScan();
 }
 
-void AppDiscoveryDialog::selectScanPath()
+void AppDiscoveryDialog::addPath()
 {
     QString path = QFileDialog::getExistingDirectory(this, "検索フォルダを選択");
     if (!path.isEmpty()) {
-        ui->customPathLineEdit->setText(path);
+        // 既に存在するかチェック
+        for (int i = 0; i < ui->customPathsListWidget->count(); ++i) {
+            if (ui->customPathsListWidget->item(i)->text() == path) {
+                QMessageBox::information(this, "情報", "このフォルダは既に追加されています。");
+                return;
+            }
+        }
+        
+        // リストに追加
+        ui->customPathsListWidget->addItem(path);
+        updatePathButtonStates();
+        qDebug() << "Added custom path:" << path;
+    }
+}
+
+void AppDiscoveryDialog::removePath()
+{
+    QList<QListWidgetItem*> selectedItems = ui->customPathsListWidget->selectedItems();
+    if (selectedItems.isEmpty()) {
+        QMessageBox::information(this, "情報", "削除するフォルダを選択してください。");
+        return;
+    }
+    
+    int ret = QMessageBox::question(this, "確認",
+                                   QString("%1個のフォルダを削除しますか？").arg(selectedItems.size()),
+                                   QMessageBox::Yes | QMessageBox::No,
+                                   QMessageBox::No);
+    
+    if (ret == QMessageBox::Yes) {
+        for (QListWidgetItem *item : selectedItems) {
+            qDebug() << "Removing custom path:" << item->text();
+            delete item;
+        }
+        updatePathButtonStates();
+    }
+}
+
+void AppDiscoveryDialog::clearPaths()
+{
+    if (ui->customPathsListWidget->count() == 0) {
+        return;
+    }
+    
+    int ret = QMessageBox::question(this, "確認",
+                                   "すべてのフォルダをクリアしますか？",
+                                   QMessageBox::Yes | QMessageBox::No,
+                                   QMessageBox::No);
+    
+    if (ret == QMessageBox::Yes) {
+        ui->customPathsListWidget->clear();
+        updatePathButtonStates();
+        qDebug() << "Cleared all custom paths";
     }
 }
 
@@ -419,10 +478,12 @@ ScanOptions AppDiscoveryDialog::getCurrentScanOptions()
     options.scanSteam = ui->scanSteamCheck->isChecked();
     options.maxDepth = ui->maxDepthSpinBox->value();
     
-    // 追加パス
-    QString customPath = ui->customPathLineEdit->text().trimmed();
-    if (!customPath.isEmpty()) {
-        options.includePaths << customPath;
+    // 追加パス（複数）
+    for (int i = 0; i < ui->customPathsListWidget->count(); ++i) {
+        QString path = ui->customPathsListWidget->item(i)->text().trimmed();
+        if (!path.isEmpty()) {
+            options.includePaths << path;
+        }
     }
     
     // 除外パターン
@@ -752,6 +813,15 @@ void AppDiscoveryDialog::removeAppsMatchingPattern(const QString &pattern)
         updateSelectedCount();
         qDebug() << "Removed" << rowsToRemove.size() << "apps matching pattern:" << pattern;
     }
+}
+
+void AppDiscoveryDialog::updatePathButtonStates()
+{
+    bool hasItems = ui->customPathsListWidget->count() > 0;
+    bool hasSelection = !ui->customPathsListWidget->selectedItems().isEmpty();
+    
+    ui->removePathButton->setEnabled(hasSelection);
+    ui->clearPathsButton->setEnabled(hasItems);
 }
 
 void AppDiscoveryDialog::clearExcludePatterns()

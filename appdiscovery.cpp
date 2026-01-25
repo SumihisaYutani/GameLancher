@@ -332,9 +332,11 @@ QList<AppInfo> AppDiscovery::discoverAllApps(const ScanOptions &options)
     paths.append(options.includePaths);
     
     // パスをスキャン
+    bool folderScanExecuted = false;
     if (!paths.isEmpty()) {
-        QList<AppInfo> folderApps = scanFoldersInternal(paths, options, false); // シグナルを発行しない
+        QList<AppInfo> folderApps = scanFoldersInternal(paths, options, true); // シグナルを発行
         allApps.append(folderApps);
+        folderScanExecuted = true;
         
         if (m_canceled) {
             emit scanCanceled();
@@ -362,7 +364,11 @@ QList<AppInfo> AppDiscovery::discoverAllApps(const ScanOptions &options)
     // 重複を除去
     allApps = mergeDuplicates(allApps);
     
-    emit scanFinished(allApps.size());
+    // シグナルは一度だけ発行
+    if (!folderScanExecuted) {
+        // フォルダスキャンが実行されなかった場合のみ発行
+        emit scanFinished(allApps.size());
+    }
     return allApps;
 }
 

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>1400</width>
-    <height>800</height>
+    <height>1000</height>
    </rect>
   </property>
   <property name="font">
@@ -60,7 +60,7 @@ QWidget {
     border: 1px solid #b3d9ff;
     border-radius: 6px;
     padding: 8px;
-    box-shadow: 0 2px 4px rgba(0,120,212,0.1);
+    /* box-shadow removed - not supported by Qt */
 }
 
 QPushButton {
@@ -269,6 +269,22 @@ QLineEdit:hover {
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="filterButton">
+         <property name="text">
+          <string>絞込み</string>
+         </property>
+         <property name="toolTip">
+          <string>検索条件でアプリを絞り込み</string>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>80</width>
+           <height>16777215</height>
+          </size>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="settingsButton">
          <property name="text">
           <string>設定</string>
@@ -377,7 +393,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
              <x>0</x>
              <y>0</y>
              <width>1378</width>
-             <height>627</height>
+             <height>827</height>
             </rect>
            </property>
            <layout class="QGridLayout" name="appGridLayout">

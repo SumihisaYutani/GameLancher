@@ -30,7 +30,9 @@ public:
 private slots:
     void startScan();
     void stopScan();
-    void selectScanPath();
+    void addPath();
+    void removePath();
+    void clearPaths();
     void addSelectedApps();
     void selectAllApps();
     void selectNoneApps();
@@ -60,6 +62,7 @@ private:
     void addPatternToExcludeFile(const QString &pattern);
     QStringList getExcludePatterns();
     void removeAppsMatchingPattern(const QString &pattern);
+    void updatePathButtonStates();
 
     Ui::AppDiscoveryDialog *ui;
     

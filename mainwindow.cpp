@@ -22,10 +22,15 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     setupConnections();
-    loadApplications();
     
-    // 初期状態の設定
-    switchToGridView();
+    // 初期状態の設定（ビュー設定のみ、再描画なし）
+    m_isGridView = true;
+    ui->viewStackedWidget->setCurrentIndex(0);
+    ui->actionGridView->setChecked(true);
+    ui->actionListView->setChecked(false);
+    
+    // アプリケーションロードと初回描画（1回のみ）
+    loadApplications();
     updateStatusBar();
     
     // ステータスバータイマーの設定
@@ -56,8 +61,14 @@ void MainWindow::setupConnections()
     connect(ui->settingsButton, &QPushButton::clicked, this, &MainWindow::onSettingsButtonClicked);
     connect(ui->viewModeButton, &QToolButton::clicked, this, &MainWindow::onViewModeButtonClicked);
     
-    // 検索
-    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
+    // 検索（リアルタイム検索を無効化）
+    // connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
+    
+    // 絞り込みボタン
+    connect(ui->filterButton, &QPushButton::clicked, this, &MainWindow::onFilterButtonClicked);
+    
+    // Enterキーでも絞り込み実行
+    connect(ui->searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::onFilterButtonClicked);
     
     // リストビューイベント
     connect(ui->listTreeWidget, &QTreeWidget::itemClicked, this, &MainWindow::onListItemClicked);
@@ -182,7 +193,7 @@ void MainWindow::updateGridView()
         connect(appWidget, &AppWidget::removeRequested, this, &MainWindow::onAppRemoveRequested);
         connect(appWidget, &AppWidget::propertiesRequested, this, &MainWindow::onAppPropertiesRequested);
         
-        qDebug() << "Adding app widget for" << app.name << "at position (" << row << "," << col << ")";
+        // アプリウィジェット追加
         m_gridLayout->addWidget(appWidget, row, col);
         m_appWidgets.append(appWidget);
         
@@ -308,11 +319,7 @@ bool MainWindow::launchApplication(const QString &appId)
     
     bool success = m_appLauncher->launch(*app);
     if (success) {
-        // 起動情報を更新
-        m_appManager->updateApp(appId, *app);
-        
-        // UI更新
-        refreshViews();
+        // 軽量UI更新（AppManager更新は不要）
         updateStatusBar();
     }
     
@@ -365,6 +372,11 @@ void MainWindow::onViewModeButtonClicked()
 
 void MainWindow::onSearchTextChanged()
 {
+    // リアルタイム検索は無効化済み（パフォーマンス改善のため）
+}
+
+void MainWindow::onFilterButtonClicked()
+{
     m_currentFilter = ui->searchLineEdit->text().trimmed();
     filterApplications();
 }
@@ -372,12 +384,24 @@ void MainWindow::onSearchTextChanged()
 // アプリウィジェットイベント
 void MainWindow::onAppWidgetClicked(const QString &appId)
 {
+    // 既に同じアプリが選択済みの場合は何もしない
+    if (m_selectedAppId == appId) {
+        return;
+    }
+    
+    QString previousSelectedId = m_selectedAppId;
     m_selectedAppId = appId;
     ui->removeAppButton->setEnabled(!appId.isEmpty());
     
-    // 他のウィジェットの選択を解除
+    // 最適化: 変更が必要なウィジェットのみ更新
     for (AppWidget *widget : std::as_const(m_appWidgets)) {
-        widget->setSelected(widget->getAppInfo().id == appId);
+        const QString &widgetId = widget->getAppInfo().id;
+        bool shouldBeSelected = (widgetId == appId);
+        
+        // 状態変更が必要な場合のみ更新
+        if (widget->isSelected() != shouldBeSelected) {
+            widget->setSelected(shouldBeSelected);
+        }
     }
 }
 
@@ -457,8 +481,14 @@ void MainWindow::onAppRemoved(const QString &appId)
 
 void MainWindow::onAppUpdated(const AppInfo &app)
 {
-    Q_UNUSED(app)
-    refreshViews();
+    // 特定のアプリのみ更新（全体再構築を避ける）
+    AppWidget* widget = findAppWidget(app.id);
+    if (widget) {
+        widget->updateAppInfo(app);
+    }
+    
+    // ステータスバーの軽量更新
+    updateStatusBar();
 }
 
 // 起動イベント
@@ -476,6 +506,9 @@ void MainWindow::onAppLaunchFinished(const QString &appId, int exitCode)
     if (app) {
         QString message = QString("%1 が終了しました (Exit Code: %2)").arg(app->name).arg(exitCode);
         statusBar()->showMessage(message, 3000);
+        
+        // 軽量なステータス更新のみ（全体再構築は不要）
+        updateStatusBar();
     }
 }
 

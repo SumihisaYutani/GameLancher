@@ -128,7 +128,6 @@ void AppWidget::setAppInfo(const AppInfo &app)
 
 void AppWidget::updateAppInfo(const AppInfo &app)
 {
-    qDebug() << "AppWidget::updateAppInfo - Updating app info for" << app.name << "with path:" << app.path;
     setAppInfo(app);
 }
 
@@ -151,6 +150,7 @@ void AppWidget::setSelected(bool selected)
     if (m_selected != selected) {
         m_selected = selected;
         updateStyleSheet();
+        // 最適化: 必要な部分のみ再描画
         update();
     }
 }
@@ -236,17 +236,21 @@ void AppWidget::paintEvent(QPaintEvent *event)
 
 void AppWidget::enterEvent(QEnterEvent *event)
 {
-    m_hovered = true;
-    updateStyleSheet();
-    update();
+    if (!m_hovered) {
+        m_hovered = true;
+        updateStyleSheet();
+        update();
+    }
     QWidget::enterEvent(event);
 }
 
 void AppWidget::leaveEvent(QEvent *event)
 {
-    m_hovered = false;
-    updateStyleSheet();
-    update();
+    if (m_hovered) {
+        m_hovered = false;
+        updateStyleSheet();
+        update();
+    }
     QWidget::leaveEvent(event);
 }
 
@@ -545,18 +549,23 @@ void AppWidget::updateIcon()
         QIcon fileIcon = iconProvider.icon(fileInfo);
         if (!fileIcon.isNull()) {
             iconPixmap = fileIcon.pixmap(m_iconSize);
-            if (!iconPixmap.isNull()) {
-                qDebug() << "AppWidget: Extracted file-specific icon for" << m_appInfo.name;
-            }
+            // アイコン抽出成功
         }
     }
     
-    // 3. IconExtractorを使用してアイコンを抽出
+    // 3. IconExtractorを使用してアイコンを抽出（プロセス内キャッシュ使用）
     if (iconPixmap.isNull() && !m_appInfo.path.isEmpty() && QFileInfo::exists(m_appInfo.path)) {
-        IconExtractor iconExtractor;
-        iconPixmap = iconExtractor.extractIconPixmap(m_appInfo.path, m_iconSize);
-        if (!iconPixmap.isNull()) {
-            qDebug() << "AppWidget: Extracted icon using IconExtractor for" << m_appInfo.name;
+        // インスタンスキャッシュでアイコン抽出の重複を防ぐ
+        QString cachePath = m_appInfo.path + "_" + QString::number(m_iconSize.width());
+        
+        if (m_iconCache.contains(cachePath)) {
+            iconPixmap = m_iconCache[cachePath];
+        } else {
+            IconExtractor iconExtractor;
+            iconPixmap = iconExtractor.extractIconPixmap(m_appInfo.path, m_iconSize);
+            if (!iconPixmap.isNull()) {
+                m_iconCache[cachePath] = iconPixmap; // インスタンスキャッシュに保存
+            }
         }
     }
     
@@ -564,7 +573,7 @@ void AppWidget::updateIcon()
     if (iconPixmap.isNull()) {
         QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
         iconPixmap = defaultIcon.pixmap(m_iconSize);
-        qDebug() << "AppWidget: Using default icon for" << m_appInfo.name;
+        // デフォルトアイコン使用
     }
     
     // アイコンサイズに合わせてスケール
@@ -661,5 +670,8 @@ void AppWidget::updateStyleSheet()
         );
     }
     
-    setStyleSheet(styleSheet);
+    // スタイルが変更された場合のみ適用
+    if (this->styleSheet() != styleSheet) {
+        setStyleSheet(styleSheet);
+    }
 }

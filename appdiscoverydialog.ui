@@ -120,26 +120,90 @@
            </widget>
           </item>
           <item row="1" column="1" colspan="2">
-           <layout class="QHBoxLayout" name="pathLayout">
+           <layout class="QVBoxLayout" name="pathLayout">
             <item>
-             <widget class="QLineEdit" name="customPathLineEdit">
-              <property name="placeholderText">
-               <string>検索に追加するフォルダパス</string>
+             <widget class="QListWidget" name="customPathsListWidget">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>80</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>検索に追加するフォルダパス一覧</string>
+              </property>
+              <property name="alternatingRowColors">
+               <bool>true</bool>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
               </property>
              </widget>
             </item>
             <item>
-             <widget class="QPushButton" name="browsePathButton">
-              <property name="maximumSize">
-               <size>
-                <width>80</width>
-                <height>16777215</height>
-               </size>
-              </property>
-              <property name="text">
-               <string>参照</string>
-              </property>
-             </widget>
+             <layout class="QHBoxLayout" name="pathButtonsLayout">
+              <item>
+               <spacer name="pathButtonsSpacer">
+                <property name="orientation">
+                 <enum>Qt::Orientation::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item>
+               <widget class="QPushButton" name="addPathButton">
+                <property name="maximumSize">
+                 <size>
+                  <width>80</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>追加</string>
+                </property>
+                <property name="toolTip">
+                 <string>フォルダを追加</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="removePathButton">
+                <property name="maximumSize">
+                 <size>
+                  <width>80</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>削除</string>
+                </property>
+                <property name="toolTip">
+                 <string>選択したフォルダを削除</string>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QPushButton" name="clearPathsButton">
+                <property name="maximumSize">
+                 <size>
+                  <width>80</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>クリア</string>
+                </property>
+                <property name="toolTip">
+                 <string>すべてのフォルダをクリア</string>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
            </layout>
           </item>

@@ -37,6 +37,7 @@ private slots:
     void onSettingsButtonClicked();
     void onViewModeButtonClicked();
     void onSearchTextChanged();
+    void onFilterButtonClicked();
     
     // アプリ操作
     void onAppWidgetClicked(const QString &appId);
