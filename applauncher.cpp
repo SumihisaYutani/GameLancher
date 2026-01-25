@@ -7,20 +7,24 @@
 
 AppLauncher::AppLauncher(QObject *parent)
     : QObject(parent)
-    , m_process(nullptr)
     , m_lastExitCode(0)
 {
 }
 
 AppLauncher::~AppLauncher()
 {
-    if (m_process) {
-        if (m_process->state() != QProcess::NotRunning) {
-            m_process->kill();
-            m_process->waitForFinished(3000);
+    // 全ての実行中プロセスを終了
+    for (auto it = m_processes.begin(); it != m_processes.end(); ++it) {
+        QProcess *process = it.value();
+        if (process && process->state() != QProcess::NotRunning) {
+            process->terminate();
+            if (!process->waitForFinished(3000)) {
+                process->kill();
+            }
         }
-        delete m_process;
+        delete process;
     }
+    m_processes.clear();
 }
 
 bool AppLauncher::launch(AppInfo &app)
@@ -36,22 +40,17 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
         return false;
     }
     
-    // 既存のプロセスがあれば終了待ち
-    if (m_process && m_process->state() != QProcess::NotRunning) {
-        qWarning() << "Previous process still running, terminating...";
-        m_process->kill();
-        m_process->waitForFinished(3000);
+    // 既存のプロセスがあるかチェック（複数起動を許可）
+    if (m_processes.contains(app.id)) {
+        QProcess *existingProcess = m_processes[app.id];
+        if (existingProcess && existingProcess->state() != QProcess::NotRunning) {
+            qDebug() << "App" << app.name << "is already running. Allowing multiple instances.";
+            // 複数起動を許可する場合は、新しいプロセスIDを生成
+        }
     }
     
-    if (!m_process) {
-        m_process = new QProcess(this);
-        connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, &AppLauncher::onProcessFinished);
-        connect(m_process, &QProcess::errorOccurred,
-                this, &AppLauncher::onProcessError);
-    }
-    
-    m_currentAppId = app.id;
+    // 新しいプロセスを作成
+    QProcess *process = createProcess(app.id);
     m_lastError.clear();
     
     // 作業ディレクトリの設定
@@ -59,19 +58,22 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
     if (workingDir.isEmpty()) {
         workingDir = getApplicationDirectory(app.path);
     }
-    m_process->setWorkingDirectory(workingDir);
+    process->setWorkingDirectory(workingDir);
     
     qDebug() << "Launching app:" << app.name << "at" << app.path;
     qDebug() << "Working directory:" << workingDir;
     qDebug() << "Arguments:" << arguments;
     
     try {
-        // プロセス開始
-        m_process->start(app.path, arguments);
+        // プロセス開始（非同期・独立実行）
+        process->start(app.path, arguments);
         
-        if (!m_process->waitForStarted(5000)) {
-            m_lastError = "アプリケーションの起動に失敗しました: " + m_process->errorString();
+        if (!process->waitForStarted(5000)) {
+            m_lastError = "アプリケーションの起動に失敗しました: " + process->errorString();
             qWarning() << m_lastError;
+            // プロセスを削除
+            m_processes.remove(app.id);
+            delete process;
             return false;
         }
         
@@ -79,12 +81,15 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
         app.updateLaunchInfo();
         emit launched(app.id);
         
-        qDebug() << "Successfully launched:" << app.name;
+        qDebug() << "Successfully launched:" << app.name << "(PID:" << process->processId() << ")";
         return true;
         
     } catch (const std::exception &e) {
         m_lastError = "起動中に例外が発生しました: " + QString::fromStdString(e.what());
         qCritical() << m_lastError;
+        // プロセスを削除
+        m_processes.remove(app.id);
+        delete process;
         return false;
     }
 }
@@ -111,29 +116,46 @@ bool AppLauncher::canLaunch(const AppInfo &app) const
 
 bool AppLauncher::isRunning() const
 {
-    return m_process && m_process->state() != QProcess::NotRunning;
+    // 実行中のプロセスがあるかチェック
+    for (auto it = m_processes.begin(); it != m_processes.end(); ++it) {
+        QProcess *process = it.value();
+        if (process && process->state() != QProcess::NotRunning) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void AppLauncher::terminate()
 {
-    if (m_process && m_process->state() != QProcess::NotRunning) {
-        qDebug() << "Terminating process for app:" << m_currentAppId;
-        m_process->terminate();
-        
-        if (!m_process->waitForFinished(5000)) {
-            qWarning() << "Process did not terminate gracefully, killing...";
-            m_process->kill();
-            m_process->waitForFinished(3000);
+    // 全ての実行中プロセスを終了
+    for (auto it = m_processes.begin(); it != m_processes.end(); ++it) {
+        QProcess *process = it.value();
+        if (process && process->state() != QProcess::NotRunning) {
+            QString appId = it.key();
+            qDebug() << "Terminating process for app:" << appId;
+            process->terminate();
+            
+            if (!process->waitForFinished(5000)) {
+                qWarning() << "Process" << appId << "did not terminate gracefully, killing...";
+                process->kill();
+                process->waitForFinished(3000);
+            }
         }
     }
 }
 
 void AppLauncher::kill()
 {
-    if (m_process && m_process->state() != QProcess::NotRunning) {
-        qDebug() << "Killing process for app:" << m_currentAppId;
-        m_process->kill();
-        m_process->waitForFinished(3000);
+    // 全ての実行中プロセスを強制終了
+    for (auto it = m_processes.begin(); it != m_processes.end(); ++it) {
+        QProcess *process = it.value();
+        if (process && process->state() != QProcess::NotRunning) {
+            QString appId = it.key();
+            qDebug() << "Killing process for app:" << appId;
+            process->kill();
+            process->waitForFinished(3000);
+        }
     }
 }
 
@@ -159,29 +181,46 @@ int AppLauncher::getExitCode() const
 
 void AppLauncher::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
+    // 送信者のプロセスを特定
+    QProcess *process = qobject_cast<QProcess*>(sender());
+    if (!process) return;
+    
+    QString appId = process->property("appId").toString();
     m_lastExitCode = exitCode;
     
-    qDebug() << "Process finished for app:" << m_currentAppId
+    qDebug() << "Process finished for app:" << appId
              << "Exit code:" << exitCode
-             << "Exit status:" << (exitStatus == QProcess::NormalExit ? "Normal" : "Crashed");
+             << "Exit status:" << (exitStatus == QProcess::NormalExit ? "Normal" : "Crashed")
+             << "(PID:" << process->processId() << ")";
     
     if (exitStatus == QProcess::CrashExit) {
         m_lastError = "アプリケーションが異常終了しました (Exit Code: " + QString::number(exitCode) + ")";
-        emit errorOccurred(m_currentAppId, m_lastError);
+        emit errorOccurred(appId, m_lastError);
     }
     
-    emit finished(m_currentAppId, exitCode);
+    emit finished(appId, exitCode);
     
-    // リセット
-    m_currentAppId.clear();
+    // プロセスをクリーンアップ
+    m_processes.remove(appId);
+    process->deleteLater();
 }
 
 void AppLauncher::onProcessError(QProcess::ProcessError error)
 {
-    m_lastError = formatErrorMessage(error);
-    qWarning() << "Process error for app:" << m_currentAppId << m_lastError;
+    // 送信者のプロセスを特定
+    QProcess *process = qobject_cast<QProcess*>(sender());
+    if (!process) return;
     
-    emit errorOccurred(m_currentAppId, m_lastError);
+    QString appId = process->property("appId").toString();
+    m_lastError = formatErrorMessage(error);
+    
+    qWarning() << "Process error for app:" << appId << m_lastError;
+    
+    emit errorOccurred(appId, m_lastError);
+    
+    // エラーの場合もプロセスをクリーンアップ
+    m_processes.remove(appId);
+    process->deleteLater();
 }
 
 QString AppLauncher::getApplicationDirectory(const QString &appPath) const
@@ -207,4 +246,23 @@ QString AppLauncher::formatErrorMessage(QProcess::ProcessError error) const
     default:
         return "不明なエラーが発生しました。";
     }
+}
+
+QProcess* AppLauncher::createProcess(const QString &appId)
+{
+    QProcess *process = new QProcess(this);
+    
+    // プロセスにappIdを関連付けるためのプロパティを設定
+    process->setProperty("appId", appId);
+    
+    // シグナル接続
+    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &AppLauncher::onProcessFinished);
+    connect(process, &QProcess::errorOccurred,
+            this, &AppLauncher::onProcessError);
+    
+    // プロセスをマップに追加
+    m_processes[appId] = process;
+    
+    return process;
 }

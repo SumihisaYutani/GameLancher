@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
-    <height>700</height>
+    <width>1400</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="font">
@@ -376,11 +376,23 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>978</width>
-             <height>527</height>
+             <width>1378</width>
+             <height>627</height>
             </rect>
            </property>
-           <layout class="QGridLayout" name="gridLayout">
+           <layout class="QGridLayout" name="appGridLayout">
+            <property name="leftMargin">
+             <number>15</number>
+            </property>
+            <property name="topMargin">
+             <number>15</number>
+            </property>
+            <property name="rightMargin">
+             <number>15</number>
+            </property>
+            <property name="bottomMargin">
+             <number>15</number>
+            </property>
             <property name="spacing">
              <number>15</number>
             </property>
@@ -504,7 +516,7 @@ QHeaderView::section:hover {
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1000</width>
+     <width>1400</width>
      <height>31</height>
     </rect>
    </property>
@@ -567,6 +579,7 @@ QMenu::separator {
      <string>ファイル(&amp;F)</string>
     </property>
     <addaction name="actionAddApp"/>
+    <addaction name="actionDiscoverApps"/>
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
@@ -755,6 +768,18 @@ QProgressBar::chunk {
   <action name="actionAbout">
    <property name="text">
     <string>Game Launcherについて(&amp;A)</string>
+   </property>
+  </action>
+  <action name="actionDiscoverApps">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/search.png</normaloff>:/icons/search.png</iconset>
+   </property>
+   <property name="text">
+    <string>アプリを自動検索(&amp;D)...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+D</string>
    </property>
   </action>
  </widget>

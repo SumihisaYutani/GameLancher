@@ -2,19 +2,19 @@
 #define ADDAPPDIALOG_H
 
 #include <QDialog>
-#include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QTextEdit>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QFormLayout>
 #include <QFileDialog>
-#include <QGroupBox>
-#include <QComboBox>
+#include <QMessageBox>
+#include <QPixmap>
+#include <QFileInfo>
 #include "appinfo.h"
 #include "iconextractor.h"
 #include "categorymanager.h"
+
+QT_BEGIN_NAMESPACE
+namespace Ui {
+class AddAppDialog;
+}
+QT_END_NAMESPACE
 
 class AddAppDialog : public QDialog
 {
@@ -39,7 +39,9 @@ public:
 private slots:
     void onBrowseButtonClicked();
     void onExecutablePathChanged();
-    void onAcceptClicked();
+    void onExtractIconClicked();
+    void onBrowseIconClicked();
+    void onClearIconClicked();
     void onIconExtracted(const QString &executablePath, const QString &iconPath);
     void onIconExtractionFailed(const QString &executablePath, const QString &error);
 
@@ -50,22 +52,13 @@ private:
     void extractAndSetIcon();
     void setDefaultAppName();
     void updateCategoryComboBox();
-    void showErrorMessage(const QString &message);
+    void showErrorMessage(const QString &message) const;
+
+protected slots:
+    void accept() override;
     
-    // UI コンポーネント
-    QLineEdit *m_nameLineEdit;
-    QLineEdit *m_pathLineEdit;
-    QPushButton *m_browseButton;
-    QComboBox *m_categoryComboBox;
-    QLabel *m_iconLabel;
-    QPushButton *m_changeIconButton;
-    QTextEdit *m_descriptionTextEdit;
-    QPushButton *m_okButton;
-    QPushButton *m_cancelButton;
-    
-    QGroupBox *m_basicInfoGroup;
-    QGroupBox *m_iconGroup;
-    QGroupBox *m_descriptionGroup;
+private:
+    Ui::AddAppDialog *ui;
     
     // データ
     AppInfo m_appInfo;

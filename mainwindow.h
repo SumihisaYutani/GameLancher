@@ -11,6 +11,7 @@
 #include "iconextractor.h"
 #include "addappdialog.h"
 #include "appwidget.h"
+#include "appdiscoverydialog.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -25,6 +26,9 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 private slots:
     // UI イベント
@@ -48,6 +52,7 @@ private slots:
     
     // アプリ管理イベント
     void onAppAdded(const AppInfo &app);
+    void onAppsAdded(int count);
     void onAppRemoved(const QString &appId);
     void onAppUpdated(const AppInfo &app);
     
@@ -58,6 +63,7 @@ private slots:
     
     // メニューアクション
     void onActionAddApp();
+    void onActionDiscoverApps();
     void onActionExit();
     void onActionGridView();
     void onActionListView();
@@ -109,6 +115,7 @@ private:
     
     // ステータスバータイマー
     QTimer *m_statusTimer;
+    QTimer *m_resizeTimer;
 };
 
 #endif // MAINWINDOW_H

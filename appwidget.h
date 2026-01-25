@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QMenu>
 #include <QContextMenuEvent>
+#include <QDateTime>
 #include "appinfo.h"
 
 class AppWidget : public QWidget
@@ -54,7 +55,13 @@ protected:
 private slots:
     void onEditAction();
     void onRemoveAction();
+    void onOpenFolderAction();
     void onPropertiesAction();
+
+private:
+    // Windows専用のフォルダオープン処理
+    bool openFolderWithExplorer(const QString &filePath);
+    bool openFolderWithDesktopServices(const QString &folderPath);
 
 private:
     void setupUI();
@@ -66,6 +73,7 @@ private:
     // UI コンポーネント
     QLabel *m_iconLabel;
     QLabel *m_nameLabel;
+    QLabel *m_folderLabel;
     QVBoxLayout *m_layout;
     QMenu *m_contextMenu;
     
@@ -75,6 +83,10 @@ private:
     QSize m_fixedSize;
     bool m_selected;
     bool m_hovered;
+    
+    // フォルダオープンの制御
+    QDateTime m_lastFolderOpenTime;
+    static QDateTime s_globalLastFolderOpenTime; // 全AppWidgetで共有
     
     // 定数
     static const QSize DEFAULT_ICON_SIZE;

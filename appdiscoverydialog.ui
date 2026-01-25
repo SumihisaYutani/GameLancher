@@ -1,0 +1,461 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AppDiscoveryDialog</class>
+ <widget class="QDialog" name="AppDiscoveryDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1400</width>
+    <height>9000</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>アプリケーション自動検出</string>
+  </property>
+  <property name="modal">
+   <bool>true</bool>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="currentIndex">
+      <number>1</number>
+     </property>
+     <widget class="QWidget" name="optionsTab">
+      <attribute name="title">
+       <string>検索設定</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="optionsLayout">
+       <item>
+        <widget class="QGroupBox" name="targetGroupBox">
+         <property name="title">
+          <string>検索対象</string>
+         </property>
+         <layout class="QVBoxLayout" name="targetLayout">
+          <item>
+           <widget class="QCheckBox" name="scanProgramFilesCheck">
+            <property name="text">
+             <string>Program Files フォルダ</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="scanDesktopCheck">
+            <property name="text">
+             <string>デスクトップショートカット</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="scanStartMenuCheck">
+            <property name="text">
+             <string>スタートメニュー</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="scanSteamCheck">
+            <property name="text">
+             <string>Steamゲーム</string>
+            </property>
+            <property name="checked">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="optionsGroupBox">
+         <property name="title">
+          <string>検索オプション</string>
+         </property>
+         <layout class="QGridLayout" name="optionsGridLayout">
+          <item row="0" column="0">
+           <widget class="QLabel" name="maxDepthLabel">
+            <property name="text">
+             <string>最大検索深度:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QSpinBox" name="maxDepthSpinBox">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="maximum">
+             <number>10</number>
+            </property>
+            <property name="value">
+             <number>5</number>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="customPathLabel">
+            <property name="text">
+             <string>追加パス:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1" colspan="2">
+           <layout class="QHBoxLayout" name="pathLayout">
+            <item>
+             <widget class="QLineEdit" name="customPathLineEdit">
+              <property name="placeholderText">
+               <string>検索に追加するフォルダパス</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="browsePathButton">
+              <property name="maximumSize">
+               <size>
+                <width>80</width>
+                <height>16777215</height>
+               </size>
+              </property>
+              <property name="text">
+               <string>参照</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="excludeGroupBox">
+         <property name="title">
+          <string>除外パターン</string>
+         </property>
+         <layout class="QVBoxLayout" name="excludeLayout">
+          <item>
+           <widget class="QLabel" name="excludeLabel">
+            <property name="text">
+             <string>除外するファイル名パターン (1行に1つ):</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTextEdit" name="excludePatternsTextEdit">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>100</height>
+             </size>
+            </property>
+            <property name="plainText">
+             <string>*unins*.exe
+*uninst*.exe
+*setup*.exe
+*install*.exe
+*update*.exe</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <layout class="QHBoxLayout" name="excludeButtonsLayout">
+            <item>
+             <spacer name="excludeButtonsSpacer">
+              <property name="orientation">
+               <enum>Qt::Orientation::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QPushButton" name="addPatternButton">
+              <property name="minimumSize">
+               <size>
+                <width>100</width>
+                <height>30</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>除外パターンを文字列で追加します</string>
+              </property>
+              <property name="text">
+               <string>パターン追加</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="clearPatternsButton">
+              <property name="minimumSize">
+               <size>
+                <width>100</width>
+                <height>30</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>除外パターンをすべてクリアします</string>
+              </property>
+              <property name="text">
+               <string>パターンクリア</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="buttonLayout">
+         <item>
+          <spacer name="buttonSpacer1">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="startScanButton">
+           <property name="minimumSize">
+            <size>
+             <width>120</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>検索開始</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="stopScanButton">
+           <property name="enabled">
+            <bool>false</bool>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>120</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>検索中止</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="buttonSpacer2">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="resultsTab">
+      <attribute name="title">
+       <string>検索結果</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="resultsLayout">
+       <item>
+        <layout class="QHBoxLayout" name="progressLayout">
+         <item>
+          <widget class="QLabel" name="progressLabel">
+           <property name="text">
+            <string>進行状況:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QProgressBar" name="progressBar"/>
+         </item>
+         <item>
+          <widget class="QLabel" name="statusLabel">
+           <property name="minimumSize">
+            <size>
+             <width>150</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>待機中</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="resultsTable">
+         <property name="alternatingRowColors">
+          <bool>true</bool>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectionBehavior::SelectRows</enum>
+         </property>
+         <property name="sortingEnabled">
+          <bool>true</bool>
+         </property>
+         <attribute name="horizontalHeaderCascadingSectionResizes">
+          <bool>false</bool>
+         </attribute>
+         <attribute name="horizontalHeaderStretchLastSection">
+          <bool>false</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>選択</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>アイコン</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>アプリケーション名</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>パス</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>カテゴリ</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>サイズ</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="bottomLayout">
+         <item>
+          <widget class="QLabel" name="selectedCountLabel">
+           <property name="text">
+            <string>選択: 0 / 0</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="bottomSpacer">
+           <property name="orientation">
+            <enum>Qt::Orientation::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="selectAllButton">
+           <property name="text">
+            <string>すべて選択</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="selectNoneButton">
+           <property name="text">
+            <string>選択解除</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addToExcludeButton">
+           <property name="minimumSize">
+            <size>
+             <width>120</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>選択したアプリを除外リストに追加します</string>
+           </property>
+           <property name="text">
+            <string>除外リストに追加</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="addSelectedButton">
+           <property name="minimumSize">
+            <size>
+             <width>150</width>
+             <height>35</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>選択したアプリを追加</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

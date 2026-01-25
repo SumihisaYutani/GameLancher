@@ -5,6 +5,8 @@
 #include <QHeaderView>
 #include <QScrollArea>
 #include <QApplication>
+#include <QResizeEvent>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -16,6 +18,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_selectedAppId("")
     , m_gridLayout(nullptr)
     , m_statusTimer(new QTimer(this))
+    , m_resizeTimer(new QTimer(this))
 {
     ui->setupUi(this);
     setupConnections();
@@ -29,6 +32,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_statusTimer->setInterval(1000); // 1秒間隔
     connect(m_statusTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
     m_statusTimer->start();
+    
+    // リサイズタイマーの設定
+    m_resizeTimer->setSingleShot(true);
+    m_resizeTimer->setInterval(200); // 200ms後に実行
+    connect(m_resizeTimer, &QTimer::timeout, this, [this]() {
+        if (m_isGridView) {
+            updateGridView();
+        }
+    });
 }
 
 MainWindow::~MainWindow()
@@ -53,6 +65,7 @@ void MainWindow::setupConnections()
     
     // アプリケーション管理イベント
     connect(m_appManager, &AppManager::appAdded, this, &MainWindow::onAppAdded);
+    connect(m_appManager, &AppManager::appsAdded, this, &MainWindow::onAppsAdded);
     connect(m_appManager, &AppManager::appRemoved, this, &MainWindow::onAppRemoved);
     connect(m_appManager, &AppManager::appUpdated, this, &MainWindow::onAppUpdated);
     
@@ -63,6 +76,7 @@ void MainWindow::setupConnections()
     
     // メニューアクション
     connect(ui->actionAddApp, &QAction::triggered, this, &MainWindow::onActionAddApp);
+    connect(ui->actionDiscoverApps, &QAction::triggered, this, &MainWindow::onActionDiscoverApps);
     connect(ui->actionExit, &QAction::triggered, this, &MainWindow::onActionExit);
     connect(ui->actionGridView, &QAction::triggered, this, &MainWindow::onActionGridView);
     connect(ui->actionListView, &QAction::triggered, this, &MainWindow::onActionListView);
@@ -79,11 +93,15 @@ void MainWindow::loadApplications()
 
 void MainWindow::refreshViews()
 {
+    qDebug() << "MainWindow::refreshViews - Refreshing views, current mode:" << (m_isGridView ? "Grid" : "List");
+    
     if (m_isGridView) {
         updateGridView();
     } else {
         updateListView();
     }
+    
+    qDebug() << "MainWindow::refreshViews - Views refreshed";
 }
 
 void MainWindow::switchToGridView()
@@ -108,12 +126,21 @@ void MainWindow::updateGridView()
 {
     clearGridView();
     
-    // グリッドレイアウトの準備
+    // グリッドレイアウトの準備 - UIファイルで定義済みのレイアウトを使用
     QWidget *gridWidget = ui->gridScrollAreaWidgetContents;
     if (!m_gridLayout) {
-        m_gridLayout = new QGridLayout(gridWidget);
-        m_gridLayout->setSpacing(15);
-        m_gridLayout->setContentsMargins(15, 15, 15, 15);
+        // UIファイルで定義されたappGridLayoutを取得
+        m_gridLayout = gridWidget->findChild<QGridLayout*>("appGridLayout");
+        if (!m_gridLayout) {
+            // 存在するレイアウトを取得するか新規作成
+            m_gridLayout = qobject_cast<QGridLayout*>(gridWidget->layout());
+            if (!m_gridLayout) {
+                m_gridLayout = new QGridLayout(gridWidget);
+                m_gridLayout->setSpacing(8);
+                m_gridLayout->setContentsMargins(10, 10, 10, 10);
+            }
+        }
+        qDebug() << "Grid layout initialized:" << (m_gridLayout ? "success" : "failed");
     }
     
     // フィルタリング
@@ -125,7 +152,24 @@ void MainWindow::updateGridView()
     // アプリウィジェットの作成と配置
     int row = 0;
     int col = 0;
-    const int maxCols = 5; // 1行あたりの最大列数
+    
+    // ウィンドウ幅に基づいて動的に列数を計算
+    int availableWidth = gridWidget->width();
+    if (availableWidth <= 0) {
+        // スクロールエリアの幅を使用
+        availableWidth = ui->gridScrollArea->width() - 20; // スクロールバー分を考慮
+    }
+    
+    const int appWidgetWidth = 110; // AppWidgetのDEFAULT_WIDGET_SIZEの幅
+    const int gridSpacing = 8; // グリッドの間隔
+    const int gridMargin = 10; // グリッドのマージン
+    
+    int maxCols = qMax(1, (availableWidth - gridMargin * 2 + gridSpacing) / (appWidgetWidth + gridSpacing));
+    maxCols = qMin(maxCols, 15); // 最大15列に制限
+    
+    qDebug() << "Grid layout - Available width:" << availableWidth << "Calculated columns:" << maxCols;
+    
+    qDebug() << "Adding" << apps.size() << "apps to grid layout";
     
     for (const AppInfo &app : std::as_const(apps)) {
         AppWidget *appWidget = new AppWidget(app, gridWidget);
@@ -133,11 +177,12 @@ void MainWindow::updateGridView()
         // シグナル接続
         connect(appWidget, &AppWidget::clicked, this, &MainWindow::onAppWidgetClicked);
         connect(appWidget, &AppWidget::doubleClicked, this, &MainWindow::onAppWidgetDoubleClicked);
-        connect(appWidget, &AppWidget::rightClicked, this, &MainWindow::onAppWidgetRightClicked);
+        // rightClickedは削除 - AppWidget独自のコンテキストメニューを使用
         connect(appWidget, &AppWidget::editRequested, this, &MainWindow::onAppEditRequested);
         connect(appWidget, &AppWidget::removeRequested, this, &MainWindow::onAppRemoveRequested);
         connect(appWidget, &AppWidget::propertiesRequested, this, &MainWindow::onAppPropertiesRequested);
         
+        qDebug() << "Adding app widget for" << app.name << "at position (" << row << "," << col << ")";
         m_gridLayout->addWidget(appWidget, row, col);
         m_appWidgets.append(appWidget);
         
@@ -153,6 +198,11 @@ void MainWindow::updateGridView()
         m_gridLayout->setColumnStretch(i, 1);
     }
     m_gridLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding), row + 1, 0);
+    
+    // レイアウトの更新を強制
+    gridWidget->updateGeometry();
+    gridWidget->update();
+    qDebug() << "Grid layout update completed. Total widgets:" << m_appWidgets.size();
 }
 
 void MainWindow::updateListView()
@@ -191,19 +241,29 @@ void MainWindow::updateListView()
 
 void MainWindow::clearGridView()
 {
-    // 既存のウィジェットを削除
+    qDebug() << "MainWindow::clearGridView - Clearing" << m_appWidgets.size() << "widgets";
+    
+    // レイアウトからウィジェットを削除（ウィジェット自体は削除しない）
+    if (m_gridLayout) {
+        while (m_gridLayout->count() > 0) {
+            QLayoutItem *item = m_gridLayout->takeAt(0);
+            if (item) {
+                // QLayoutItemのみを削除、ウィジェットは後で削除
+                delete item;
+            }
+        }
+    }
+    
+    // ウィジェットを安全に削除
     for (AppWidget *widget : std::as_const(m_appWidgets)) {
-        delete widget;
+        if (widget) {
+            widget->setParent(nullptr); // 親子関係を断つ
+            widget->deleteLater(); // 安全な削除
+        }
     }
     m_appWidgets.clear();
     
-    // レイアウトをクリア
-    if (m_gridLayout) {
-        QLayoutItem *item;
-        while ((item = m_gridLayout->takeAt(0)) != nullptr) {
-            delete item;
-        }
-    }
+    qDebug() << "MainWindow::clearGridView - Grid view cleared";
 }
 
 void MainWindow::clearListView()
@@ -323,6 +383,7 @@ void MainWindow::onAppWidgetClicked(const QString &appId)
 
 void MainWindow::onAppWidgetDoubleClicked(const QString &appId)
 {
+    qDebug() << "MainWindow::onAppWidgetDoubleClicked - Launching app:" << appId;
     launchApplication(appId);
 }
 
@@ -374,14 +435,23 @@ void MainWindow::onAppAdded(const AppInfo &app)
     updateAppCount();
 }
 
+void MainWindow::onAppsAdded(int count)
+{
+    qDebug() << "MainWindow::onAppsAdded - Added" << count << "apps in batch";
+    refreshViews();
+    updateAppCount();
+    statusBar()->showMessage(QString("%1個のアプリケーションを追加しました").arg(count), 3000);
+}
+
 void MainWindow::onAppRemoved(const QString &appId)
 {
-    Q_UNUSED(appId)
+    qDebug() << "MainWindow::onAppRemoved - Removing app:" << appId;
     refreshViews();
     updateAppCount();
     if (m_selectedAppId == appId) {
         m_selectedAppId.clear();
         ui->removeAppButton->setEnabled(false);
+        qDebug() << "Cleared selected app ID and disabled remove button";
     }
 }
 
@@ -422,6 +492,16 @@ void MainWindow::onAppLaunchError(const QString &appId, const QString &error)
 void MainWindow::onActionAddApp()
 {
     onAddAppButtonClicked();
+}
+
+void MainWindow::onActionDiscoverApps()
+{
+    AppDiscoveryDialog dialog(m_appManager, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        refreshViews();
+        updateAppCount();
+        statusBar()->showMessage("アプリケーションの自動検出が完了しました", 3000);
+    }
 }
 
 void MainWindow::onActionExit()
@@ -500,23 +580,34 @@ void MainWindow::editApplication(const QString &appId)
 
 void MainWindow::removeApplication(const QString &appId)
 {
+    qDebug() << "MainWindow::removeApplication - Starting removal for app ID:" << appId;
+    
     AppInfo *app = m_appManager->findApp(appId);
     if (!app) {
+        qWarning() << "MainWindow::removeApplication - App not found:" << appId;
         QMessageBox::warning(this, "エラー", "アプリケーションが見つかりません。");
         return;
     }
     
+    QString appName = app->name; // 削除前に名前を保存
+    qDebug() << "MainWindow::removeApplication - Found app:" << appName;
+    
     int ret = QMessageBox::question(this, "確認",
-                                   QString("'%1' を削除しますか？").arg(app->name),
+                                   QString("'%1' を削除しますか？").arg(appName),
                                    QMessageBox::Yes | QMessageBox::No,
                                    QMessageBox::No);
     
     if (ret == QMessageBox::Yes) {
+        qDebug() << "MainWindow::removeApplication - User confirmed deletion, proceeding";
         if (m_appManager->removeApp(appId)) {
-            statusBar()->showMessage("アプリケーションを削除しました: " + app->name, 3000);
+            statusBar()->showMessage("アプリケーションを削除しました: " + appName, 3000);
+            qDebug() << "MainWindow::removeApplication - Successfully removed app:" << appName;
         } else {
+            qWarning() << "MainWindow::removeApplication - Failed to remove app:" << appId;
             QMessageBox::warning(this, "エラー", "アプリケーションの削除に失敗しました。");
         }
+    } else {
+        qDebug() << "MainWindow::removeApplication - User cancelled deletion";
     }
 }
 
@@ -591,4 +682,14 @@ QString MainWindow::formatLastLaunch(const QDateTime &dateTime) const
 QString MainWindow::formatLaunchCount(int count) const
 {
     return QString("%1回").arg(count);
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    
+    // グリッドビューの場合のみ、リサイズに応じてレイアウトを更新
+    if (m_isGridView && m_resizeTimer) {
+        m_resizeTimer->start(); // タイマーをリスタート
+    }
 }

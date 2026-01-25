@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
+#include <QHash>
 #include "appinfo.h"
 
 class AppLauncher : public QObject
@@ -44,14 +45,14 @@ private slots:
     void onProcessError(QProcess::ProcessError error);
 
 private:
-    QProcess *m_process;
-    QString m_currentAppId;
+    QHash<QString, QProcess*> m_processes; // appId -> QProcess のマッピング
     QString m_workingDirectory;
     QString m_lastError;
     int m_lastExitCode;
     
     QString getApplicationDirectory(const QString &appPath) const;
     QString formatErrorMessage(QProcess::ProcessError error) const;
+    QProcess* createProcess(const QString &appId);
 };
 
 #endif // APPLAUNCHER_H

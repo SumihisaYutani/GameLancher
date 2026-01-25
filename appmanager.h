@@ -19,6 +19,7 @@ public:
     
     // アプリ管理
     bool addApp(const AppInfo &app);
+    int addApps(const QList<AppInfo> &apps); // 一括追加機能
     bool removeApp(const QString &appId);
     bool updateApp(const QString &appId, const AppInfo &updatedApp);
     AppInfo* findApp(const QString &appId);
@@ -54,6 +55,7 @@ public:
 
 signals:
     void appAdded(const AppInfo &app);
+    void appsAdded(int count); // 一括追加完了シグナル
     void appRemoved(const QString &appId);
     void appUpdated(const AppInfo &app);
     void dataLoaded();

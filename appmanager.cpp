@@ -50,16 +50,63 @@ bool AppManager::addApp(const AppInfo &app)
     return true;
 }
 
+int AppManager::addApps(const QList<AppInfo> &apps)
+{
+    qDebug() << "AppManager::addApps called with" << apps.size() << "apps";
+    
+    int addedCount = 0;
+    
+    for (const AppInfo &app : apps) {
+        // 同じパスのアプリが既に存在するかチェック
+        bool exists = false;
+        for (const auto &existingApp : m_apps) {
+            if (existingApp.path == app.path) {
+                qWarning() << "App with same path already exists:" << app.path;
+                exists = true;
+                break;
+            }
+        }
+        
+        if (exists) {
+            continue;
+        }
+        
+        if (!app.isValid()) {
+            qWarning() << "Invalid app data:" << app.name << app.path;
+            continue;
+        }
+        
+        m_apps.append(app);
+        addedCount++;
+        qDebug() << "Added app:" << app.name;
+    }
+    
+    if (addedCount > 0) {
+        emit appsAdded(addedCount);
+        saveApps();
+        qDebug() << "Successfully added" << addedCount << "apps in batch";
+    }
+    
+    return addedCount;
+}
+
 bool AppManager::removeApp(const QString &appId)
 {
+    qDebug() << "AppManager::removeApp - Attempting to remove app with ID:" << appId;
     for (int i = 0; i < m_apps.size(); ++i) {
         if (m_apps[i].id == appId) {
+            QString appName = m_apps[i].name;
+            qDebug() << "AppManager::removeApp - Found app at index" << i << ":" << appName;
             m_apps.removeAt(i);
+            qDebug() << "AppManager::removeApp - App removed from list, emitting signal";
             emit appRemoved(appId);
+            qDebug() << "AppManager::removeApp - Signal emitted, saving apps";
             saveApps();
+            qDebug() << "AppManager::removeApp - Successfully removed app:" << appName;
             return true;
         }
     }
+    qWarning() << "AppManager::removeApp - App not found:" << appId;
     return false;
 }
 
@@ -330,12 +377,9 @@ void AppManager::initializeDataFile()
 
 QString AppManager::getDefaultDataFilePath() const
 {
-    QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (appDataDir.isEmpty()) {
-        // フォールバック: アプリケーション実行ディレクトリ
-        appDataDir = QApplication::applicationDirPath();
-    }
-    return QDir(appDataDir).filePath("apps.json");
+    // アプリケーション実行ディレクトリ下に直接保存
+    QString appDir = QApplication::applicationDirPath();
+    return QDir(appDir).filePath("apps.json");
 }
 
 CategoryManager* AppManager::getCategoryManager() const

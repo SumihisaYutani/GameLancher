@@ -20,7 +20,9 @@ SOURCES += \
     iconextractor.cpp \
     addappdialog.cpp \
     appwidget.cpp \
-    categorymanager.cpp
+    categorymanager.cpp \
+    appdiscovery.cpp \
+    appdiscoverydialog.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -30,10 +32,14 @@ HEADERS += \
     iconextractor.h \
     addappdialog.h \
     appwidget.h \
-    categorymanager.h
+    categorymanager.h \
+    appdiscovery.h \
+    appdiscoverydialog.h
 
 FORMS += \
-    mainwindow.ui
+    mainwindow.ui \
+    addappdialog.ui \
+    appdiscoverydialog.ui
 
 TRANSLATIONS += \
     GameLancher_ja_JP.ts
