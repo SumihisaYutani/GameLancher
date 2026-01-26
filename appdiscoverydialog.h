@@ -50,7 +50,7 @@ private slots:
 private:
     void setupUI();
     void updateSelectedCount();
-    void addAppToResults(const AppInfo &app);
+    void addAppToResults(AppInfo &app);
     ScanOptions getCurrentScanOptions();
     QList<AppInfo> getSelectedApps();
     void setUIEnabled(bool enabled);

@@ -10,6 +10,7 @@
 #include <QProgressBar>
 #include <QLabel>
 #include <QElapsedTimer>
+#include <QFileIconProvider>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)

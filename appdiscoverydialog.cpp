@@ -326,7 +326,7 @@ void AppDiscoveryDialog::previewApp(int row, int column)
     QMessageBox::information(this, "アプリケーション情報", info);
 }
 
-void AppDiscoveryDialog::addAppToResults(const AppInfo &app)
+void AppDiscoveryDialog::addAppToResults(AppInfo &app)
 {
     int row = ui->resultsTable->rowCount();
     ui->resultsTable->insertRow(row);
