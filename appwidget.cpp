@@ -48,8 +48,9 @@ AppWidget::AppWidget(const AppInfo &app, QWidget *parent)
     updateAppInfo(app);
     // qDebug() << "AppWidget updateAppInfo took:" << setupTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
     
-    setMouseTracking(true);
-    setAttribute(Qt::WA_Hover, true);
+    // スクロール最適化: マウストラッキングとホバーを無効化してパフォーマンス向上
+    // setMouseTracking(true);
+    // setAttribute(Qt::WA_Hover, true);
     
     // qDebug() << "AppWidget constructor TOTAL took:" << constructorTimer.elapsed() << "ms for" << app.name; // DISABLED for performance
 }
@@ -168,8 +169,8 @@ void AppWidget::setSelected(bool selected)
     if (m_selected != selected) {
         m_selected = selected;
         updateStyleSheet();
-        // 最適化: 必要な部分のみ再描画
-        update();
+        // 最適化: 必要な部分のみ再描画（スクロール最適化のためコメントアウト）
+        // update();
     }
 }
 
@@ -221,32 +222,24 @@ void AppWidget::contextMenuEvent(QContextMenuEvent *event)
 
 void AppWidget::paintEvent(QPaintEvent *event)
 {
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    
-    QRect rect = this->rect();
-    rect.adjust(1, 1, -1, -1); // マージンを少し取る
-    
-    // 背景の描画
-    if (m_selected) {
-        // 選択時の背景
-        QLinearGradient gradient(0, 0, 0, rect.height());
-        gradient.setColorAt(0, QColor(33, 150, 243, 100)); // #2196f3 with alpha
-        gradient.setColorAt(1, QColor(25, 118, 210, 120)); // #1976d2 with alpha
+    // スクロール最適化: 簡素な描画処理でパフォーマンス向上
+    if (m_selected || m_hovered) {
+        QPainter painter(this);
+        // Antialiasingを無効化して高速化
+        // painter.setRenderHint(QPainter::Antialiasing);
         
-        painter.setBrush(QBrush(gradient));
-        painter.setPen(QPen(QColor(25, 118, 210), 2));
-        painter.drawRoundedRect(rect, 6, 6);
+        QRect rect = this->rect();
+        rect.adjust(2, 2, -2, -2); // マージンを簡素化
         
-    } else if (m_hovered) {
-        // ホバー時の背景
-        QLinearGradient gradient(0, 0, 0, rect.height());
-        gradient.setColorAt(0, QColor(227, 242, 253, 80)); // #e3f2fd with alpha
-        gradient.setColorAt(1, QColor(187, 222, 251, 100)); // #bbdefb with alpha
-        
-        painter.setBrush(QBrush(gradient));
-        painter.setPen(QPen(QColor(179, 217, 255, 150), 1));
-        painter.drawRoundedRect(rect, 6, 6);
+        if (m_selected) {
+            // 選択時: シンプルな単色背景
+            painter.fillRect(rect, QColor(33, 150, 243, 120));
+            painter.setPen(QColor(25, 118, 210));
+            painter.drawRect(rect);
+        } else if (m_hovered) {
+            // ホバー時: シンプルな単色背景
+            painter.fillRect(rect, QColor(227, 242, 253, 100));
+        }
     }
     
     QWidget::paintEvent(event);
@@ -257,7 +250,8 @@ void AppWidget::enterEvent(QEnterEvent *event)
     if (!m_hovered) {
         m_hovered = true;
         updateStyleSheet();
-        update();
+        // スクロールパフォーマンス最適化のためホバー時のupdate()を無効化
+        // update();
     }
     QWidget::enterEvent(event);
 }
@@ -267,7 +261,8 @@ void AppWidget::leaveEvent(QEvent *event)
     if (m_hovered) {
         m_hovered = false;
         updateStyleSheet();
-        update();
+        // スクロールパフォーマンス最適化のためホバー解除時のupdate()を無効化
+        // update();
     }
     QWidget::leaveEvent(event);
 }
@@ -569,6 +564,7 @@ void AppWidget::updateIcon()
         QString possibleIconPath = iconExtractor.generateIconPath(m_appInfo.path);
         if (QFileInfo::exists(possibleIconPath)) {
             iconPixmap = QPixmap(possibleIconPath);
+            qDebug() << "GRID: Found cached icon:" << possibleIconPath << "for" << m_appInfo.name;
         }
     }
     // qDebug() << "Icon step 1 took:" << step1Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
@@ -703,8 +699,8 @@ void AppWidget::updateStyleSheet()
         );
     }
     
-    // スタイルが変更された場合のみ適用
-    if (this->styleSheet() != styleSheet) {
-        setStyleSheet(styleSheet);
-    }
+    // スタイルが変更された場合のみ適用（スクロール最適化のため無効化）
+    // if (this->styleSheet() != styleSheet) {
+    //     setStyleSheet(styleSheet);
+    // }
 }

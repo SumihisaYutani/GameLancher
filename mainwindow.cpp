@@ -4,6 +4,7 @@
 #include <QMenu>
 #include <QHeaderView>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QApplication>
 #include <QResizeEvent>
 #include <QTimer>
@@ -28,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent)
     , m_loadTimer(new QTimer(this))
     , m_uiUpdateTimer(new QTimer(this))
     , m_isLoading(false)
+    , m_responseTimer(new QTimer(this))
+    , m_isMonitoringResponse(false)
 {
     ui->setupUi(this);
     setupConnections();
@@ -39,6 +42,14 @@ MainWindow::MainWindow(QWidget *parent)
     ui->actionGridView->setChecked(false);
     ui->actionListView->setChecked(true);
     
+    // スクロールエリアのパフォーマンス最適化
+    ui->gridScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    ui->gridScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->gridScrollArea->setWidgetResizable(true);
+    // スムーススクロールを有効化
+    ui->gridScrollArea->verticalScrollBar()->setSingleStep(20);
+    ui->gridScrollArea->verticalScrollBar()->setPageStep(100);
+    
     // アプリケーションロードと初回描画（非同期で実行）
     loadApplicationsAsync();
     updateStatusBar();
@@ -48,9 +59,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_statusTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
     m_statusTimer->start();
     
-    // リサイズタイマーの設定
+    // リサイズタイマーの設定（スクロールパフォーマンス最適化）
     m_resizeTimer->setSingleShot(true);
-    m_resizeTimer->setInterval(200); // 200ms後に実行
+    m_resizeTimer->setInterval(500); // 500msに延長して頻繁な更新を防ぐ
     connect(m_resizeTimer, &QTimer::timeout, this, [this]() {
         if (m_isGridView) {
             updateGridView();
@@ -128,6 +139,28 @@ void MainWindow::setupConnections()
     connect(ui->listTreeWidget, &QTreeWidget::itemClicked, this, &MainWindow::onListItemClicked);
     connect(ui->listTreeWidget, &QTreeWidget::itemDoubleClicked, this, &MainWindow::onListItemDoubleClicked);
     
+    // リストビューの行の高さとアイコンサイズを調整
+    ui->listTreeWidget->setIconSize(QSize(32, 32)); // アイコンサイズを32x32に
+    // ui->listTreeWidget->setUniformRowHeights(true); // スクロールパフォーマンス最適化のため無効化
+    ui->listTreeWidget->setRootIsDecorated(false); // インデントなし
+    
+    // スタイルシートで行の高さを調整（スクロールパフォーマンス最適化）
+    ui->listTreeWidget->setStyleSheet(
+        "QTreeWidget::item { "
+        "    padding: 6px; "  // heightを削除してpaddingで高さ調整
+        "}"
+        "QTreeWidget::item:selected { "
+        "    background-color: #3daee9; "
+        "    color: white; "
+        "}"
+        "QTreeWidget::item:hover { "
+        "    background-color: #e0e0e0; "
+        "}"
+    );
+    
+    // パフォーマンス最適化: 行の高さをQtのデフォルトに任せる
+    // ui->listTreeWidget->setUniformRowHeights(true); // これもコメントアウト
+    
     // アプリケーション管理イベント
     connect(m_appManager, &AppManager::appAdded, this, &MainWindow::onAppAdded);
     connect(m_appManager, &AppManager::appsAdded, this, &MainWindow::onAppsAdded);
@@ -151,6 +184,12 @@ void MainWindow::setupConnections()
     // ロード関連の接続
     connect(m_loadTimer, &QTimer::timeout, this, &MainWindow::onLoadingFinished);
     connect(m_uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onLoadingProgress);
+    
+    // UI応答性監視の接続
+    connect(m_responseTimer, &QTimer::timeout, this, &MainWindow::checkUIResponse);
+    
+    // UI応答性監視を開始
+    startResponseMonitoring();
 }
 
 void MainWindow::loadApplications()
@@ -283,16 +322,26 @@ void MainWindow::updateListView()
         // 1. 保存済みアイコンファイルを確認
         QIcon appIcon;
         if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
-            appIcon = QIcon(app.iconPath);
+            // 32x32サイズでアイコンを読み込み、品質を向上
+            QPixmap pixmap(app.iconPath);
+            if (!pixmap.isNull()) {
+                appIcon = QIcon(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            }
+            // qDebug() << "LIST: Using iconPath:" << app.iconPath << "for" << app.name;
         } else if (app.iconPath.isEmpty() && !app.path.isEmpty()) {
             // 保存済みアイコンファイルを確認
             QString possibleIconPath = m_iconExtractor->generateIconPath(app.path);
             if (QFileInfo::exists(possibleIconPath)) {
-                appIcon = QIcon(possibleIconPath);
+                QPixmap pixmap(possibleIconPath);
+                if (!pixmap.isNull()) {
+                    appIcon = QIcon(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+                }
+                qDebug() << "LIST: Found cached icon:" << possibleIconPath << "for" << app.name;
             } else {
                 // ファイルアイコンプロバイダーを使用
                 QFileInfo fileInfo(app.path);
                 appIcon = iconProvider.icon(fileInfo);
+                qDebug() << "LIST: Using file icon for:" << app.name << "(no cache found)";
             }
         }
         
@@ -855,14 +904,14 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
     QElapsedTimer widgetCreationTimer;
     widgetCreationTimer.start();
     
+    // 仮想化: 表示される部分のみ描画してスクロールパフォーマンスを向上
+    int maxVisibleApps = qMin(apps.size(), 100); // 最大100個まで表示
+    
     QList<AppWidget*> newWidgets;
-    newWidgets.reserve(apps.size()); // 全アプリ数に合わせて予約
+    newWidgets.reserve(maxVisibleApps); // 表示するアプリ数に合わせて予約
+    qDebug() << "VIRTUALIZED DISPLAY: Showing" << maxVisibleApps << "of" << apps.size() << "apps";
     
-    // 制限解除: 全てのアプリを表示
-    int maxApps = apps.size(); // 制限なし
-    qDebug() << "FULL DISPLAY: Showing all" << maxApps << "apps";
-    
-    for (int i = 0; i < maxApps; ++i) {
+    for (int i = 0; i < maxVisibleApps; ++i) {
         const AppInfo &app = apps[i];
         AppWidget *appWidget = new AppWidget(app, gridWidget);
         
@@ -874,6 +923,11 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
         connect(appWidget, &AppWidget::propertiesRequested, this, &MainWindow::onAppPropertiesRequested);
         
         newWidgets.append(appWidget);
+    }
+    
+    // 残りのアプリ数を表示
+    if (apps.size() > maxVisibleApps) {
+        qDebug() << "Note:" << (apps.size() - maxVisibleApps) << "apps hidden for performance";
     }
     
     qDebug() << "Widget creation took:" << widgetCreationTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
@@ -905,9 +959,10 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
         m_gridLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding), lastRow + 1, 0);
     }
     
-    // 最終的なレイアウト更新
-    gridWidget->updateGeometry();
-    gridWidget->update();
+    // 最終的なレイアウト更新（スクロールパフォーマンス最適化）
+    // updateGeometry()とupdate()を削除してスクロール時の固まりを解決
+    // gridWidget->updateGeometry();
+    // gridWidget->update();
     
     qDebug() << "updateGridViewAsync TOTAL took:" << asyncTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
 }
@@ -963,10 +1018,58 @@ QString MainWindow::formatLaunchCount(int count) const
 
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
+    // UI応答性監視: リサイズイベントの記録
+    if (m_isMonitoringResponse) {
+        m_lastResponseTime.restart();
+    }
+    
     QMainWindow::resizeEvent(event);
     
     // グリッドビューの場合のみ、リサイズに応じてレイアウトを更新
     if (m_isGridView && m_resizeTimer) {
         m_resizeTimer->start(); // タイマーをリスタート
+    }
+}
+
+// UI応答性監視の実装
+void MainWindow::startResponseMonitoring()
+{
+    if (!m_isMonitoringResponse) {
+        m_isMonitoringResponse = true;
+        m_lastResponseTime.start();
+        m_responseTimer->setInterval(1000); // 1秒毎にチェック
+        m_responseTimer->start();
+        qDebug() << "UI response monitoring started";
+    }
+}
+
+void MainWindow::stopResponseMonitoring()
+{
+    if (m_isMonitoringResponse) {
+        m_isMonitoringResponse = false;
+        m_responseTimer->stop();
+        qDebug() << "UI response monitoring stopped";
+    }
+}
+
+void MainWindow::checkUIResponse()
+{
+    if (!m_isMonitoringResponse) return;
+    
+    qint64 elapsed = m_lastResponseTime.elapsed();
+    
+    // 2秒以上応答がない場合、固まりと判定
+    if (elapsed > 2000) {
+        qWarning() << "*** UI FREEZE DETECTED ***";
+        qWarning() << "No UI response for" << elapsed << "ms";
+        qWarning() << "Current view mode:" << (m_isGridView ? "Grid" : "List");
+        qWarning() << "App count:" << m_appManager->getAppCount();
+        qWarning() << "Widgets count:" << m_appWidgets.size();
+        
+        // 監視をリセット
+        m_lastResponseTime.restart();
+    } else if (elapsed > 500) {
+        // 500ms以上の遅延を警告
+        qDebug() << "UI response delay detected:" << elapsed << "ms";
     }
 }

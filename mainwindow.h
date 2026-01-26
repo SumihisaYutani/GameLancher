@@ -79,6 +79,11 @@ private slots:
     
     // その他
     void updateStatusBar();
+    
+    // UI応答性監視
+    void checkUIResponse();
+    void startResponseMonitoring();
+    void stopResponseMonitoring();
 
 private:
     void setupConnections();
@@ -124,6 +129,15 @@ private:
     // グリッドレイアウト
     QGridLayout *m_gridLayout;
     QList<AppWidget*> m_appWidgets;
+    
+    // パフォーマンス最適化用
+    int m_cachedColumns;
+    int m_lastCalculatedWidth;
+    
+    // UI応答性監視用
+    QTimer *m_responseTimer;
+    QElapsedTimer m_lastResponseTime;
+    bool m_isMonitoringResponse;
     
     // ステータスバータイマー
     QTimer *m_statusTimer;
