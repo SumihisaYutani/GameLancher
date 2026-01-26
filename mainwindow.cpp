@@ -17,7 +17,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_appManager(new AppManager(this))
     , m_appLauncher(new AppLauncher(this))
     , m_iconExtractor(new IconExtractor(this))
-    , m_isGridView(true)
+    , m_isGridView(false)
     , m_selectedAppId("")
     , m_gridLayout(nullptr)
     , m_statusTimer(new QTimer(this))
@@ -32,11 +32,11 @@ MainWindow::MainWindow(QWidget *parent)
     setupConnections();
     setupProgressBar();
     
-    // 初期状態の設定（ビュー設定のみ、再描画なし）
-    m_isGridView = true;
-    ui->viewStackedWidget->setCurrentIndex(0);
-    ui->actionGridView->setChecked(true);
-    ui->actionListView->setChecked(false);
+    // 初期状態をリストビューに変更（軽量表示のため）
+    m_isGridView = false;
+    ui->viewStackedWidget->setCurrentIndex(1);
+    ui->actionGridView->setChecked(false);
+    ui->actionListView->setChecked(true);
     
     // アプリケーションロードと初回描画（非同期で実行）
     loadApplicationsAsync();
@@ -241,6 +241,9 @@ void MainWindow::updateListView()
     
     clearListView();
     
+    QElapsedTimer listTimer;
+    listTimer.start();
+    
     // フィルタリング
     QList<AppInfo> apps = m_appManager->getApps();
     if (!m_currentFilter.isEmpty()) {
@@ -251,9 +254,16 @@ void MainWindow::updateListView()
         return;
     }
     
-    // 一括でアイテムを作成
+    qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (lightweight mode)";
+    
+    // リストビューで大量データを効率的に処理
+    ui->listTreeWidget->setUpdatesEnabled(false); // 描画を一時停止
+    
+    // 一括でアイテムを作成（アイコンロードを省略して高速化）
     QList<QTreeWidgetItem*> items;
     items.reserve(apps.size());
+    
+    QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
     
     for (const AppInfo &app : apps) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
@@ -263,12 +273,8 @@ void MainWindow::updateListView()
         item->setText(2, formatLastLaunch(app.lastLaunch));
         item->setText(3, formatLaunchCount(app.launchCount));
         
-        // アイコンの設定
-        if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
-            item->setIcon(0, QIcon(app.iconPath));
-        } else {
-            item->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_ComputerIcon));
-        }
+        // アイコンを軽量化: デフォルトアイコンのみ使用（高速化）
+        item->setIcon(0, defaultIcon);
         
         items.append(item);
     }
@@ -281,6 +287,10 @@ void MainWindow::updateListView()
     ui->listTreeWidget->header()->resizeSection(1, 300);
     ui->listTreeWidget->header()->resizeSection(2, 150);
     ui->listTreeWidget->header()->resizeSection(3, 100);
+    
+    ui->listTreeWidget->setUpdatesEnabled(true); // 描画を再開
+    
+    qDebug() << "LIST VIEW: Completed in" << listTimer.elapsed() << "ms for" << apps.size() << "apps";
 }
 
 void MainWindow::clearGridView()
