@@ -257,14 +257,7 @@ void MainWindow::updateListView()
     
     qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (lightweight mode)";
     
-    // デバッグ: 最初の3つのアプリのアイコン情報をチェック
-    for (int i = 0; i < qMin(3, apps.size()); ++i) {
-        const AppInfo &app = apps[i];
-        qDebug() << "APP" << i << ":" << app.name;
-        qDebug() << "  iconPath:" << app.iconPath;
-        qDebug() << "  iconPath exists:" << (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath));
-        qDebug() << "  execPath:" << app.path;
-    }
+    // アイコン処理統一により、グリッドビューとリストビューで同じ結果を提供
     
     // リストビューで大量データを効率的に処理
     ui->listTreeWidget->setUpdatesEnabled(false); // 描画を一時停止
@@ -284,35 +277,26 @@ void MainWindow::updateListView()
         item->setText(2, formatLastLaunch(app.lastLaunch));
         item->setText(3, formatLaunchCount(app.launchCount));
         
-        // 軽量なアイコン取得: 保存済みアイコンを優先使用
+        // アイコン処理を簡素化: AppWidgetと同じロジックを使用
+        QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+        
+        // 1. 保存済みアイコンファイルを確認
         QIcon appIcon;
         if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
-            // 1. 保存済みアイコンパスがある場合（最優先）
             appIcon = QIcon(app.iconPath);
-            qDebug() << "Using saved icon:" << app.iconPath << "for" << app.name;
-        } else if (!app.path.isEmpty() && QFileInfo::exists(app.path)) {
-            // 2. iconPathが空の場合、IconExtractorでアイコンを生成
-            if (app.iconPath.isEmpty()) {
-                QString iconSavePath = m_iconExtractor->generateIconPath(app.path);
-                if (m_iconExtractor->extractAndSaveIcon(app.path, iconSavePath)) {
-                    appIcon = QIcon(iconSavePath);
-                    // AppManagerのデータも更新（注意: 非constなアクセスが必要）
-                    qDebug() << "Generated new icon:" << iconSavePath << "for" << app.name;
-                } else {
-                    // IconExtractor失敗時はファイルアイコンプロバイダーを使用
-                    QFileInfo fileInfo(app.path);
-                    appIcon = iconProvider.icon(fileInfo);
-                    qDebug() << "IconExtractor failed, using file icon for:" << app.name;
-                }
+        } else if (app.iconPath.isEmpty() && !app.path.isEmpty()) {
+            // 保存済みアイコンファイルを確認
+            QString possibleIconPath = m_iconExtractor->generateIconPath(app.path);
+            if (QFileInfo::exists(possibleIconPath)) {
+                appIcon = QIcon(possibleIconPath);
             } else {
-                // 3. ファイルアイコンプロバイダーを使用（軽量フォールバック）
+                // ファイルアイコンプロバイダーを使用
                 QFileInfo fileInfo(app.path);
                 appIcon = iconProvider.icon(fileInfo);
-                qDebug() << "Using file icon for:" << app.name << "iconPath was:" << app.iconPath;
             }
         }
         
-        // アイコンが取得できない場合はデフォルトを使用
+        // アイコンを設定
         item->setIcon(0, appIcon.isNull() ? defaultIcon : appIcon);
         
         items.append(item);

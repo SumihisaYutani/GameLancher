@@ -569,7 +569,6 @@ void AppWidget::updateIcon()
         QString possibleIconPath = iconExtractor.generateIconPath(m_appInfo.path);
         if (QFileInfo::exists(possibleIconPath)) {
             iconPixmap = QPixmap(possibleIconPath);
-            qDebug() << "Found saved icon:" << possibleIconPath << "for" << m_appInfo.name;
         }
     }
     // qDebug() << "Icon step 1 took:" << step1Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
@@ -588,23 +587,10 @@ void AppWidget::updateIcon()
     }
     // qDebug() << "Icon step 2 (FileIconProvider) took:" << step2Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
-    // 3. IconExtractorを使用してアイコンを抽出（プロセス内キャッシュ使用）
+    // 3. IconExtractorの抽出は無効化（統一処理のためリストビューでのみ実行）
     QElapsedTimer step3Timer;
     step3Timer.start();
-    if (iconPixmap.isNull() && !m_appInfo.path.isEmpty() && QFileInfo::exists(m_appInfo.path)) {
-        // インスタンスキャッシュでアイコン抽出の重複を防ぐ
-        QString cachePath = m_appInfo.path + "_" + QString::number(m_iconSize.width());
-        
-        if (m_iconCache.contains(cachePath)) {
-            iconPixmap = m_iconCache[cachePath];
-        } else {
-            IconExtractor iconExtractor;
-            iconPixmap = iconExtractor.extractIconPixmap(m_appInfo.path, m_iconSize);
-            if (!iconPixmap.isNull()) {
-                m_iconCache[cachePath] = iconPixmap; // インスタンスキャッシュに保存
-            }
-        }
-    }
+    // アイコン統一処理: リストビューで生成されたアイコンファイルのみ使用
     // qDebug() << "Icon step 3 (IconExtractor) took:" << step3Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
     // 4. デフォルトアイコン
