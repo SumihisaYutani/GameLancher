@@ -235,6 +235,11 @@ bool AppManager::loadApps()
             AppInfo app;
             app.fromJson(value.toObject());
             if (app.isValid()) {
+                // 既存データのiconPath修正: exeファイルパスが設定されている場合は空にする
+                if (!app.iconPath.isEmpty() && app.iconPath.endsWith(".exe", Qt::CaseInsensitive)) {
+                    qDebug() << "Fixing invalid iconPath for app:" << app.name;
+                    app.iconPath = ""; // 空にして後でIconExtractorで再生成させる
+                }
                 m_apps.append(app);
             }
         }

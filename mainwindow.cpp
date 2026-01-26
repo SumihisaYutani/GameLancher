@@ -289,12 +289,27 @@ void MainWindow::updateListView()
         if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
             // 1. 保存済みアイコンパスがある場合（最優先）
             appIcon = QIcon(app.iconPath);
-            // qDebug() << "Using saved icon:" << app.iconPath << "for" << app.name; // デバッグ用
+            qDebug() << "Using saved icon:" << app.iconPath << "for" << app.name;
         } else if (!app.path.isEmpty() && QFileInfo::exists(app.path)) {
-            // 2. ファイルアイコンプロバイダーを使用（軽量フォールバック）
-            QFileInfo fileInfo(app.path);
-            appIcon = iconProvider.icon(fileInfo);
-            // qDebug() << "Using file icon for:" << app.name << "iconPath was:" << app.iconPath; // デバッグ用
+            // 2. iconPathが空の場合、IconExtractorでアイコンを生成
+            if (app.iconPath.isEmpty()) {
+                QString iconSavePath = m_iconExtractor->generateIconPath(app.path);
+                if (m_iconExtractor->extractAndSaveIcon(app.path, iconSavePath)) {
+                    appIcon = QIcon(iconSavePath);
+                    // AppManagerのデータも更新（注意: 非constなアクセスが必要）
+                    qDebug() << "Generated new icon:" << iconSavePath << "for" << app.name;
+                } else {
+                    // IconExtractor失敗時はファイルアイコンプロバイダーを使用
+                    QFileInfo fileInfo(app.path);
+                    appIcon = iconProvider.icon(fileInfo);
+                    qDebug() << "IconExtractor failed, using file icon for:" << app.name;
+                }
+            } else {
+                // 3. ファイルアイコンプロバイダーを使用（軽量フォールバック）
+                QFileInfo fileInfo(app.path);
+                appIcon = iconProvider.icon(fileInfo);
+                qDebug() << "Using file icon for:" << app.name << "iconPath was:" << app.iconPath;
+            }
         }
         
         // アイコンが取得できない場合はデフォルトを使用
