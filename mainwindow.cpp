@@ -256,6 +256,15 @@ void MainWindow::updateListView()
     
     qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (lightweight mode)";
     
+    // デバッグ: 最初の3つのアプリのアイコン情報をチェック
+    for (int i = 0; i < qMin(3, apps.size()); ++i) {
+        const AppInfo &app = apps[i];
+        qDebug() << "APP" << i << ":" << app.name;
+        qDebug() << "  iconPath:" << app.iconPath;
+        qDebug() << "  iconPath exists:" << (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath));
+        qDebug() << "  execPath:" << app.path;
+    }
+    
     // リストビューで大量データを効率的に処理
     ui->listTreeWidget->setUpdatesEnabled(false); // 描画を一時停止
     
@@ -264,6 +273,7 @@ void MainWindow::updateListView()
     items.reserve(apps.size());
     
     QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    QFileIconProvider iconProvider; // 軽量なアイコン取得用
     
     for (const AppInfo &app : apps) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
@@ -273,8 +283,21 @@ void MainWindow::updateListView()
         item->setText(2, formatLastLaunch(app.lastLaunch));
         item->setText(3, formatLaunchCount(app.launchCount));
         
-        // アイコンを軽量化: デフォルトアイコンのみ使用（高速化）
-        item->setIcon(0, defaultIcon);
+        // 軽量なアイコン取得: 保存済みアイコンを優先使用
+        QIcon appIcon;
+        if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
+            // 1. 保存済みアイコンパスがある場合（最優先）
+            appIcon = QIcon(app.iconPath);
+            // qDebug() << "Using saved icon:" << app.iconPath << "for" << app.name; // デバッグ用
+        } else if (!app.path.isEmpty() && QFileInfo::exists(app.path)) {
+            // 2. ファイルアイコンプロバイダーを使用（軽量フォールバック）
+            QFileInfo fileInfo(app.path);
+            appIcon = iconProvider.icon(fileInfo);
+            // qDebug() << "Using file icon for:" << app.name << "iconPath was:" << app.iconPath; // デバッグ用
+        }
+        
+        // アイコンが取得できない場合はデフォルトを使用
+        item->setIcon(0, appIcon.isNull() ? defaultIcon : appIcon);
         
         items.append(item);
     }

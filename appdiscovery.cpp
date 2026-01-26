@@ -187,9 +187,8 @@ AppInfo AppDiscovery::createAppInfoFromFile(const QFileInfo &fileInfo)
     app.category = detectCategory(fileInfo);
     app.createdAt = QDateTime::currentDateTime();
     
-    // アイコンの抽出を試行
-    QString iconPath = fileInfo.absoluteFilePath();
-    app.iconPath = iconPath; // IconExtractorで後で処理される
+    // アイコンの抽出を試行 - IconExtractorを使って実際のアイコンファイルを生成
+    app.iconPath = ""; // 初期化 - 後でIconExtractorで処理される
     
     qDebug() << "Discovered app:" << app.name << "at" << app.path;
     

@@ -381,14 +381,23 @@ void AppDiscoveryDialog::addAppToResults(const AppInfo &app)
             }
         }
         
-        // フォールバック: IconExtractorを使用
+        // フォールバック: IconExtractorを使用して実際にアイコンファイルを保存
         if (!iconLoaded) {
             IconExtractor iconExtractor;
-            iconPixmap = iconExtractor.extractIconPixmap(app.path, QSize(48, 48));
-            if (!iconPixmap.isNull()) {
-                qDebug() << "Extracted icon using IconExtractor from:" << app.path;
-                m_iconCacheForPath[app.path] = iconPixmap; // キャッシュに保存
-                iconLoaded = true;
+            
+            // アイコンファイルのパスを生成
+            QString iconSavePath = iconExtractor.generateIconPath(app.path);
+            
+            // アイコンを抽出してファイルに保存
+            if (iconExtractor.extractAndSaveIcon(app.path, iconSavePath)) {
+                // 保存されたアイコンファイルを読み込み
+                iconPixmap.load(iconSavePath);
+                if (!iconPixmap.isNull()) {
+                    qDebug() << "Extracted and saved icon to:" << iconSavePath;
+                    app.iconPath = iconSavePath; // 実際のアイコンファイルパスを設定
+                    m_iconCacheForPath[app.path] = iconPixmap; // キャッシュに保存
+                    iconLoaded = true;
+                }
             } else {
                 qDebug() << "IconExtractor failed for:" << app.path;
             }
