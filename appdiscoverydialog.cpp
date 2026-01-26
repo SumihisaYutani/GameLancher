@@ -245,8 +245,10 @@ void AppDiscoveryDialog::onAppDiscovered(const AppInfo &app)
 {
     // 除外リストとパターンに含まれているかチェック
     if (!isAppExcluded(app) && !isAppExcludedByPattern(app)) {
-        addAppToResults(app);
-        m_discoveredApps.append(app);
+        // アイコン処理のためにコピーを作成
+        AppInfo appCopy = app;
+        addAppToResults(appCopy);
+        m_discoveredApps.append(appCopy);
         updateSelectedCount();
         qDebug() << "App discovered and added:" << app.name << "at" << app.path;
     } else {
