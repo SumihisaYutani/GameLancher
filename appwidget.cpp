@@ -558,11 +558,19 @@ void AppWidget::updateIcon()
     
     QPixmap iconPixmap;
     
-    // 1. アイコンファイルが存在する場合
+    // 1. アイコンファイルが存在する場合（保存済みアイコンを確認）
     QElapsedTimer step1Timer;
     step1Timer.start();
     if (!m_appInfo.iconPath.isEmpty() && QFileInfo::exists(m_appInfo.iconPath)) {
         iconPixmap = QPixmap(m_appInfo.iconPath);
+    } else if (m_appInfo.iconPath.isEmpty() && !m_appInfo.path.isEmpty()) {
+        // iconPathが空の場合、保存済みアイコンファイルがあるか確認
+        IconExtractor iconExtractor;
+        QString possibleIconPath = iconExtractor.generateIconPath(m_appInfo.path);
+        if (QFileInfo::exists(possibleIconPath)) {
+            iconPixmap = QPixmap(possibleIconPath);
+            qDebug() << "Found saved icon:" << possibleIconPath << "for" << m_appInfo.name;
+        }
     }
     // qDebug() << "Icon step 1 took:" << step1Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
