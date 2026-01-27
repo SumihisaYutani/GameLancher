@@ -28,9 +28,14 @@ MainWindow::MainWindow(QWidget *parent)
     , m_loadingLabel(nullptr)
     , m_loadTimer(new QTimer(this))
     , m_uiUpdateTimer(new QTimer(this))
-    , m_isLoading(false)
     , m_responseTimer(new QTimer(this))
+    , m_isLoading(false)
     , m_isMonitoringResponse(false)
+    , m_iconLoadTimer(new QTimer(this))
+    , m_iconCacheTimer(new QTimer(this))
+    , m_iconSetTimer(new QTimer(this))
+    , m_iconCacheProgress(0)
+    , m_iconSetProgress(0)
 {
     ui->setupUi(this);
     setupConnections();
@@ -139,22 +144,38 @@ void MainWindow::setupConnections()
     connect(ui->listTreeWidget, &QTreeWidget::itemClicked, this, &MainWindow::onListItemClicked);
     connect(ui->listTreeWidget, &QTreeWidget::itemDoubleClicked, this, &MainWindow::onListItemDoubleClicked);
     
-    // リストビューの行の高さとアイコンサイズを調整
-    ui->listTreeWidget->setIconSize(QSize(32, 32)); // アイコンサイズを32x32に
+    // スクロール監視でオンデマンドアイコンローディング
+    connect(ui->listTreeWidget->verticalScrollBar(), &QScrollBar::valueChanged, this, &MainWindow::onScrollValueChanged);
+    
+    // アイコンサイズをセル高に合わせて設定
+    ui->listTreeWidget->setIconSize(QSize(32, 32)); // 40pxセルに合うサイズ
     // ui->listTreeWidget->setUniformRowHeights(true); // スクロールパフォーマンス最適化のため無効化
     ui->listTreeWidget->setRootIsDecorated(false); // インデントなし
     
-    // スタイルシートで行の高さを調整（スクロールパフォーマンス最適化）
+    // 緊急最適化: さらなるパフォーマンス向上
+    ui->listTreeWidget->setAlternatingRowColors(false); // 交互色を無効化
+    ui->listTreeWidget->setSortingEnabled(false); // ソートを無効化
+    ui->listTreeWidget->setSelectionMode(QAbstractItemView::SingleSelection); // 選択モードを簡素化
+    
+    // スクロールパフォーマンス最適化
+    ui->listTreeWidget->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel); // ピクセル単位スクロール（スムーズ）
+    ui->listTreeWidget->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel); // ピクセル単位スクロール
+    ui->listTreeWidget->setAutoScroll(false); // 自動スクロール無効
+    ui->listTreeWidget->setIndentation(0); // インデント無効でシンプル化
+    
+    // 大量データ用の最適化設定
+    ui->listTreeWidget->setLayoutDirection(Qt::LeftToRight); // レイアウト最適化
+    ui->listTreeWidget->setWordWrap(false); // ワードラップ無効
+    
+    // セルの高さを40px固定 + アイコンキャッシュ方式
     ui->listTreeWidget->setStyleSheet(
         "QTreeWidget::item { "
-        "    padding: 6px; "  // heightを削除してpaddingで高さ調整
+        "    height: 40px; "  // セルの高さを明確に40pxに指定
+        "    padding: 4px; "
         "}"
         "QTreeWidget::item:selected { "
         "    background-color: #3daee9; "
         "    color: white; "
-        "}"
-        "QTreeWidget::item:hover { "
-        "    background-color: #e0e0e0; "
         "}"
     );
     
@@ -180,6 +201,7 @@ void MainWindow::setupConnections()
     connect(ui->actionListView, &QAction::triggered, this, &MainWindow::onActionListView);
     connect(ui->actionRefresh, &QAction::triggered, this, &MainWindow::onActionRefresh);
     connect(ui->actionAbout, &QAction::triggered, this, &MainWindow::onActionAbout);
+    connect(ui->actionClearIconCache, &QAction::triggered, this, &MainWindow::onActionClearIconCache);
     
     // ロード関連の接続
     connect(m_loadTimer, &QTimer::timeout, this, &MainWindow::onLoadingFinished);
@@ -187,6 +209,21 @@ void MainWindow::setupConnections()
     
     // UI応答性監視の接続
     connect(m_responseTimer, &QTimer::timeout, this, &MainWindow::checkUIResponse);
+    
+    // アイコンローディングタイマーの設定
+    m_iconLoadTimer->setSingleShot(true);
+    m_iconLoadTimer->setInterval(100); // 100ms遅延でバッチ処理
+    connect(m_iconLoadTimer, &QTimer::timeout, this, &MainWindow::loadVisibleIcons);
+    
+    // アイコンキャッシュ構築タイマーの設定
+    m_iconCacheTimer->setSingleShot(false);
+    m_iconCacheTimer->setInterval(50); // 50ms間隔でステップ実行
+    connect(m_iconCacheTimer, &QTimer::timeout, this, &MainWindow::buildIconCacheStep);
+    
+    // アイコン設定タイマーの設定（段階的設定用）
+    m_iconSetTimer->setSingleShot(false);
+    m_iconSetTimer->setInterval(50); // 50ms間隔でバランス良く設定
+    connect(m_iconSetTimer, &QTimer::timeout, this, &MainWindow::setIconsStep);
     
     // UI応答性監視を開始
     startResponseMonitoring();
@@ -242,6 +279,12 @@ void MainWindow::updateGridView()
 {
     if (m_isLoading) return; // ロード中は更新しない
     
+    // 最終的な解決策: グリッドビューをリストビューに切り替え
+    qDebug() << "Grid view performance issue detected - switching to list view for better performance";
+    switchToListView();
+    
+    // 以下の重いグリッド処理を無効化
+    /*
     clearGridView();
     
     // グリッドレイアウトの準備 - UIファイルで定義済みのレイアウトを使用
@@ -273,6 +316,7 @@ void MainWindow::updateGridView()
     
     // アプリウィジェットの作成と配置を段階的に実行
     updateGridViewAsync(apps);
+    */
 }
 
 void MainWindow::updateListView()
@@ -294,19 +338,16 @@ void MainWindow::updateListView()
         return;
     }
     
-    qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (lightweight mode)";
+    // アプリ情報をキャッシュ
+    m_appList = apps;
     
-    // アイコン処理統一により、グリッドビューとリストビューで同じ結果を提供
+    qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (text-only mode)";
     
-    // リストビューで大量データを効率的に処理
     ui->listTreeWidget->setUpdatesEnabled(false); // 描画を一時停止
     
-    // 一括でアイテムを作成（アイコンロードを省略して高速化）
+    // 一括でアイテムを作成（アイコンなし、テキストのみ）
     QList<QTreeWidgetItem*> items;
     items.reserve(apps.size());
-    
-    QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    QFileIconProvider iconProvider; // 軽量なアイコン取得用
     
     for (const AppInfo &app : apps) {
         QTreeWidgetItem *item = new QTreeWidgetItem();
@@ -316,37 +357,8 @@ void MainWindow::updateListView()
         item->setText(2, formatLastLaunch(app.lastLaunch));
         item->setText(3, formatLaunchCount(app.launchCount));
         
-        // アイコン処理を簡素化: AppWidgetと同じロジックを使用
-        QIcon defaultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-        
-        // 1. 保存済みアイコンファイルを確認
-        QIcon appIcon;
-        if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
-            // 32x32サイズでアイコンを読み込み、品質を向上
-            QPixmap pixmap(app.iconPath);
-            if (!pixmap.isNull()) {
-                appIcon = QIcon(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-            }
-            // qDebug() << "LIST: Using iconPath:" << app.iconPath << "for" << app.name;
-        } else if (app.iconPath.isEmpty() && !app.path.isEmpty()) {
-            // 保存済みアイコンファイルを確認
-            QString possibleIconPath = m_iconExtractor->generateIconPath(app.path);
-            if (QFileInfo::exists(possibleIconPath)) {
-                QPixmap pixmap(possibleIconPath);
-                if (!pixmap.isNull()) {
-                    appIcon = QIcon(pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-                }
-                qDebug() << "LIST: Found cached icon:" << possibleIconPath << "for" << app.name;
-            } else {
-                // ファイルアイコンプロバイダーを使用
-                QFileInfo fileInfo(app.path);
-                appIcon = iconProvider.icon(fileInfo);
-                qDebug() << "LIST: Using file icon for:" << app.name << "(no cache found)";
-            }
-        }
-        
-        // アイコンを設定
-        item->setIcon(0, appIcon.isNull() ? defaultIcon : appIcon);
+        // アイコンは後で事前キャッシュから設定
+        // item->setIcon(0, QIcon()); // アイコンは設定しない
         
         items.append(item);
     }
@@ -362,7 +374,10 @@ void MainWindow::updateListView()
     
     ui->listTreeWidget->setUpdatesEnabled(true); // 描画を再開
     
-    qDebug() << "LIST VIEW: Completed in" << listTimer.elapsed() << "ms for" << apps.size() << "apps";
+    qDebug() << "LIST VIEW: Completed in" << listTimer.elapsed() << "ms for" << apps.size() << "apps (text-only)";
+    
+    // アイコンキャッシュの事前構築を開始
+    preloadAllIconsAsync(apps);
 }
 
 void MainWindow::clearGridView()
@@ -478,10 +493,13 @@ void MainWindow::onSettingsButtonClicked()
 
 void MainWindow::onViewModeButtonClicked()
 {
+    // パフォーマンス問題のためグリッドビューを無効化
     if (m_isGridView) {
         switchToListView();
     } else {
-        switchToGridView();
+        // グリッドビューへの切り替えを禁止
+        qDebug() << "Grid view disabled for performance reasons";
+        // switchToGridView(); // コメントアウト
     }
 }
 
@@ -659,7 +677,9 @@ void MainWindow::onActionExit()
 
 void MainWindow::onActionGridView()
 {
-    switchToGridView();
+    // パフォーマンス問題のためグリッドビューを無効化
+    qDebug() << "Grid view disabled for performance reasons - staying in list view";
+    // switchToGridView(); // コメントアウト
 }
 
 void MainWindow::onActionListView()
@@ -669,6 +689,9 @@ void MainWindow::onActionListView()
 
 void MainWindow::onActionRefresh()
 {
+    qDebug() << "Refresh requested - keeping icon cache";
+    // リフレッシュではアイコンキャッシュは保持（パフォーマンス重視）
+    // アイコンキャッシュクリアは専用メニューから実行
     loadApplications();
     statusBar()->showMessage("アプリケーションリストを更新しました", 2000);
 }
@@ -680,6 +703,38 @@ void MainWindow::onActionAbout()
                       "Windows用アプリケーションランチャー\n"
                       "Qt " QT_VERSION_STR " で開発\n\n"
                       "© 2026 Game Launcher Project");
+}
+
+void MainWindow::onActionClearIconCache()
+{
+    int ret = QMessageBox::question(this, "アイコンキャッシュクリア",
+                                   QString("現在 %1 個のアイコンがキャッシュされています。\n"
+                                          "すべてのアイコンキャッシュをクリアして再構築しますか？")
+                                          .arg(m_iconCache32px.size()),
+                                   QMessageBox::Yes | QMessageBox::No,
+                                   QMessageBox::No);
+    
+    if (ret == QMessageBox::Yes) {
+        qDebug() << "User requested icon cache clear";
+        
+        // アイコンキャッシュをクリア
+        clearIconCache();
+        
+        // リストビューからアイコンを削除
+        for (int i = 0; i < ui->listTreeWidget->topLevelItemCount(); ++i) {
+            QTreeWidgetItem *item = ui->listTreeWidget->topLevelItem(i);
+            if (item) {
+                item->setIcon(0, QIcon()); // アイコンを削除
+            }
+        }
+        
+        // アイコンキャッシュを再構築
+        if (!m_appList.isEmpty()) {
+            preloadAllIconsAsync(m_appList);
+        }
+        
+        statusBar()->showMessage("アイコンキャッシュをクリアしました。再構築中...", 3000);
+    }
 }
 
 void MainWindow::updateStatusBar()
@@ -884,32 +939,34 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
     
     QWidget *gridWidget = ui->gridScrollAreaWidgetContents;
     
-    // ウィンドウ幅に基づいて動的に列数を計算
-    int availableWidth = gridWidget->width();
-    if (availableWidth <= 0) {
-        availableWidth = ui->gridScrollArea->width() - 20;
-    }
+    // パフォーマンス最適化: 列数を固定して計算コストを削減
+    const int maxCols = 8; // 固定値でパフォーマンス向上
     
-    const int appWidgetWidth = 110;
-    const int gridSpacing = 8;
-    const int gridMargin = 10;
+    // 以下の動的計算を無効化して高速化
+    // int availableWidth = gridWidget->width();
+    // if (availableWidth <= 0) {
+    //     availableWidth = ui->gridScrollArea->width() - 20;
+    // }
+    // const int appWidgetWidth = 110;
+    // const int gridSpacing = 8;
+    // const int gridMargin = 10;
+    // int maxCols = qMax(1, (availableWidth - gridMargin * 2 + gridSpacing) / (appWidgetWidth + gridSpacing));
+    // maxCols = qMin(maxCols, 15);
     
-    int maxCols = qMax(1, (availableWidth - gridMargin * 2 + gridSpacing) / (appWidgetWidth + gridSpacing));
-    maxCols = qMin(maxCols, 15);
-    
-    qDebug() << "Grid layout - Available width:" << availableWidth << "Calculated columns:" << maxCols;
-    qDebug() << "Creating" << apps.size() << "app widgets for batch display";
+    // パフォーマンス最適化: デバッグログを削減して処理を軽量化
+    // qDebug() << "Grid layout - Available width:" << availableWidth << "Calculated columns:" << maxCols;
+    // qDebug() << "Creating" << apps.size() << "app widgets for batch display";
     
     // シンプルな一括読み込み（安全のため段階的読み込みを無効化）
-    QElapsedTimer widgetCreationTimer;
-    widgetCreationTimer.start();
+    // QElapsedTimer widgetCreationTimer;
+    // widgetCreationTimer.start();
     
-    // 仮想化: 表示される部分のみ描画してスクロールパフォーマンスを向上
-    int maxVisibleApps = qMin(apps.size(), 100); // 最大100個まで表示
+    // 表示数制限を解除: 全てのアプリを表示
+    int maxVisibleApps = apps.size(); // 制限なし
     
     QList<AppWidget*> newWidgets;
     newWidgets.reserve(maxVisibleApps); // 表示するアプリ数に合わせて予約
-    qDebug() << "VIRTUALIZED DISPLAY: Showing" << maxVisibleApps << "of" << apps.size() << "apps";
+    qDebug() << "UNLIMITED DISPLAY: Showing all" << maxVisibleApps << "apps without restriction";
     
     for (int i = 0; i < maxVisibleApps; ++i) {
         const AppInfo &app = apps[i];
@@ -930,11 +987,12 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
         qDebug() << "Note:" << (apps.size() - maxVisibleApps) << "apps hidden for performance";
     }
     
-    qDebug() << "Widget creation took:" << widgetCreationTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
+    // パフォーマンス最適化: タイマーやログを無効化
+    // qDebug() << "Widget creation took:" << widgetCreationTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
     
     // シンプルな同期レイアウト追加（安定化のため）
-    QElapsedTimer layoutTimer;
-    layoutTimer.start();
+    // QElapsedTimer layoutTimer;
+    // layoutTimer.start();
     
     // 全ウィジェットを一括でレイアウトに追加
     for (int i = 0; i < newWidgets.size(); ++i) {
@@ -946,7 +1004,7 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
         m_appWidgets.append(appWidget);
     }
     
-    qDebug() << "Layout addition took:" << layoutTimer.elapsed() << "ms";
+    // qDebug() << "Layout addition took:" << layoutTimer.elapsed() << "ms";
     
     // レイアウトの調整
     if (!newWidgets.isEmpty()) {
@@ -964,7 +1022,54 @@ void MainWindow::updateGridViewAsync(const QList<AppInfo> &apps)
     // gridWidget->updateGeometry();
     // gridWidget->update();
     
-    qDebug() << "updateGridViewAsync TOTAL took:" << asyncTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
+    // qDebug() << "updateGridViewAsync TOTAL took:" << asyncTimer.elapsed() << "ms for" << newWidgets.size() << "widgets";
+}
+
+// 32pxアイコンキャッシュシステムの実装
+QIcon MainWindow::getOrCreateIcon32px(const QString &filePath)
+{
+    // キャッシュにあるかチェック
+    if (m_iconCache32px.contains(filePath)) {
+        return m_iconCache32px[filePath];
+    }
+    
+    QIcon resultIcon;
+    
+    // 1. 保存済みアイコンファイルを確認
+    QString iconPath = m_iconExtractor->generateIconPath(filePath);
+    if (QFileInfo::exists(iconPath)) {
+        QPixmap pixmap(iconPath);
+        if (!pixmap.isNull()) {
+            // 32pxにリサイズしてキャッシュ
+            QPixmap scaledPixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
+            resultIcon = QIcon(scaledPixmap);
+        }
+    }
+    
+    // 2. 保存済みアイコンがない場合、ファイルアイコンを使用
+    if (resultIcon.isNull() && QFileInfo::exists(filePath)) {
+        QFileIconProvider iconProvider;
+        QFileInfo fileInfo(filePath);
+        resultIcon = iconProvider.icon(fileInfo);
+    }
+    
+    // 3. それでもない場合はデフォルトアイコン
+    if (resultIcon.isNull()) {
+        resultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    }
+    
+    // キャッシュに保存
+    m_iconCache32px[filePath] = resultIcon;
+    
+    return resultIcon;
+}
+
+// アイコンキャッシュをクリア
+void MainWindow::clearIconCache()
+{
+    qDebug() << "Clearing icon cache..." << m_iconCache32px.size() << "cached icons";
+    m_iconCache32px.clear();
+    qDebug() << "Icon cache cleared.";
 }
 
 
@@ -1037,9 +1142,9 @@ void MainWindow::startResponseMonitoring()
     if (!m_isMonitoringResponse) {
         m_isMonitoringResponse = true;
         m_lastResponseTime.start();
-        m_responseTimer->setInterval(1000); // 1秒毎にチェック
+        m_responseTimer->setInterval(200); // 200ms毎にチェック（より細かく監視）
         m_responseTimer->start();
-        qDebug() << "UI response monitoring started";
+        qDebug() << "UI response monitoring started (200ms interval)";
     }
 }
 
@@ -1071,5 +1176,295 @@ void MainWindow::checkUIResponse()
     } else if (elapsed > 500) {
         // 500ms以上の遅延を警告
         qDebug() << "UI response delay detected:" << elapsed << "ms";
+    }
+}
+
+// アイコンキャッシュの事前構築の実装
+void MainWindow::preloadAllIconsAsync(const QList<AppInfo> &apps)
+{
+    qDebug() << "Starting preload of" << apps.size() << "icons in background";
+    
+    // キャッシュ構築キューを準備
+    m_iconCacheQueue = apps;
+    m_iconCacheProgress = 0;
+    
+    // プログレスバーを表示
+    m_loadingLabel->setText("アイコンをキャッシュ中...");
+    m_loadingLabel->setVisible(true);
+    m_progressBar->setVisible(true);
+    m_progressBar->setRange(0, apps.size());
+    m_progressBar->setValue(0);
+    
+    // バックグラウンドでキャッシュ構築を開始
+    m_iconCacheTimer->start();
+}
+
+void MainWindow::buildIconCacheStep()
+{
+    const int batchSize = 10; // 1ステップで10個ずつ処理
+    int processed = 0;
+    
+    while (processed < batchSize && m_iconCacheProgress < m_iconCacheQueue.size()) {
+        const AppInfo &app = m_iconCacheQueue[m_iconCacheProgress];
+        
+        // キャッシュに存在しない場合のみ構築
+        if (!m_iconCache32px.contains(app.path)) {
+            QIcon icon = getOrCreateIcon32px(app.path);
+            // getOrCreateIcon32px内でキャッシュに保存される
+        }
+        
+        m_iconCacheProgress++;
+        processed++;
+        
+        // プログレスバー更新
+        m_progressBar->setValue(m_iconCacheProgress);
+        
+        if (m_iconCacheProgress % 50 == 0) {
+            qDebug() << "Icon cache progress:" << m_iconCacheProgress << "/" << m_iconCacheQueue.size();
+        }
+    }
+    
+    // 完了チェック
+    if (m_iconCacheProgress >= m_iconCacheQueue.size()) {
+        qDebug() << "=== CACHE CONSTRUCTION FINISHED ===";
+        qDebug() << "Total processed:" << m_iconCacheProgress;
+        qDebug() << "Cache size:" << m_iconCache32px.size();
+        m_iconCacheTimer->stop();
+        qDebug() << "Timer stopped, calling onIconCacheCompleted()";
+        onIconCacheCompleted();
+    }
+}
+
+void MainWindow::onIconCacheCompleted()
+{
+    qDebug() << "=== onIconCacheCompleted START ===";
+    qDebug() << "Icon cache construction completed!" << m_iconCache32px.size() << "icons cached";
+    qDebug() << "App list size:" << m_appList.size();
+    qDebug() << "List widget item count:" << (ui->listTreeWidget ? ui->listTreeWidget->topLevelItemCount() : -1);
+    
+    // プログレスバーのメッセージを変更
+    m_loadingLabel->setText("アイコンを設定中...");
+    m_progressBar->setRange(0, m_appList.size());
+    m_progressBar->setValue(0);
+    
+    // 段階的アイコン設定を開始
+    m_iconSetProgress = 0;
+    
+    qDebug() << "Starting icon set timer with interval:" << m_iconSetTimer->interval() << "ms";
+    qDebug() << "Timer active before start:" << m_iconSetTimer->isActive();
+    m_iconSetTimer->start();
+    qDebug() << "Timer active after start:" << m_iconSetTimer->isActive();
+    qDebug() << "Timer remaining time:" << m_iconSetTimer->remainingTime();
+    
+    // 強制的にsetIconsStepを1回実行してテスト（デバッグ完了のため無効化）
+    // qDebug() << "*** MANUAL TEST: Calling setIconsStep directly ***";
+    // setIconsStep();
+    
+    qDebug() << "=== onIconCacheCompleted END ===";
+}
+
+void MainWindow::setIconsStep()
+{
+    QElapsedTimer stepTimer;
+    stepTimer.start();
+    
+    // デバッグログを50回に1回に削減
+    if (m_iconSetProgress % 50 == 0) {
+        qDebug() << "=== setIconsStep START - Progress:" << m_iconSetProgress 
+                 << "/" << m_appList.size() << "===";
+    }
+    
+    const int batchSize = 100; // 1ステップで100個ずつ設定（高速化）
+    int processed = 0;
+    
+    ui->listTreeWidget->setUpdatesEnabled(false); // 描画を一時停止
+    
+    QElapsedTimer iconSetTimer;
+    iconSetTimer.start();
+    
+    while (processed < batchSize && m_iconSetProgress < m_appList.size() && 
+           m_iconSetProgress < ui->listTreeWidget->topLevelItemCount()) {
+        
+        QElapsedTimer itemTimer;
+        itemTimer.start();
+        
+        QTreeWidgetItem *item = ui->listTreeWidget->topLevelItem(m_iconSetProgress);
+        if (item && m_iconSetProgress < m_appList.size()) {
+            const AppInfo &app = m_appList[m_iconSetProgress];
+            if (m_iconCache32px.contains(app.path)) {
+                QElapsedTimer setIconTimer;
+                setIconTimer.start();
+                item->setIcon(0, m_iconCache32px[app.path]);
+                
+                // 重い処理をデバッグ
+                if (setIconTimer.elapsed() > 10) {
+                    qWarning() << "SLOW setIcon for:" << app.name 
+                               << "took:" << setIconTimer.elapsed() << "ms";
+                }
+            }
+        }
+        
+        if (itemTimer.elapsed() > 5) {
+            qDebug() << "Item processing for index" << m_iconSetProgress 
+                     << "took:" << itemTimer.elapsed() << "ms";
+        }
+        
+        m_iconSetProgress++;
+        processed++;
+    }
+    
+    ui->listTreeWidget->setUpdatesEnabled(true); // 描画を再開
+    
+    // UIイベント処理の無効化（パフォーマンス問題の原因）
+    // QElapsedTimer processTimer;
+    // processTimer.start();
+    // QApplication::processEvents(); // ← これが200msかかる原因！
+    // qDebug() << "processEvents() took:" << processTimer.elapsed() << "ms";
+    
+    // プログレスバー更新を完全無効化（200ms問題の原因）
+    // if (m_iconSetProgress % 50 == 0) {  // 50ステップごとにのみ更新
+    //     QElapsedTimer progressTimer;
+    //     progressTimer.start();
+    //     m_progressBar->setValue(m_iconSetProgress);
+    //     if (progressTimer.elapsed() > 5) {
+    //         qDebug() << "Progress bar update took:" << progressTimer.elapsed() << "ms";
+    //     }
+    // }
+    
+    // 完了チェック
+    if (m_iconSetProgress >= m_appList.size() || 
+        m_iconSetProgress >= ui->listTreeWidget->topLevelItemCount()) {
+        
+        qDebug() << "=== ICON SETTING COMPLETED ===";
+        
+        QElapsedTimer finishTimer;
+        finishTimer.start();
+        
+        m_iconSetTimer->stop();
+        
+        // プログレスバーを隠す
+        m_loadingLabel->setVisible(false);
+        m_progressBar->setVisible(false);
+        
+        qDebug() << "All" << m_iconSetProgress << "icons set from cache";
+        qDebug() << "Finish processing took:" << finishTimer.elapsed() << "ms";
+        
+        QElapsedTimer asyncTimer;
+        asyncTimer.start();
+        // 以降はスクロール時のオンデマンドローディングを有効化
+        startAsyncIconLoading(m_appList);
+        qDebug() << "startAsyncIconLoading took:" << asyncTimer.elapsed() << "ms";
+    }
+    
+    // qDebug() << "=== setIconsStep TOTAL took:" << stepTimer.elapsed() << "ms ==="; // ログ削減
+}
+
+// オンデマンドアイコンローディングの実装（キャッシュから取得）
+void MainWindow::startAsyncIconLoading(const QList<AppInfo> &apps)
+{
+    QElapsedTimer asyncLoadTimer;
+    asyncLoadTimer.start();
+    
+    qDebug() << "startAsyncIconLoading called with" << apps.size() << "apps";
+    
+    m_appList = apps;
+    
+    // loadVisibleIcons を無効化（スクロール問題対策）
+    // QTimer::singleShot(100, this, &MainWindow::loadVisibleIcons);
+    
+    qDebug() << "startAsyncIconLoading setup took:" << asyncLoadTimer.elapsed() << "ms (loadVisibleIcons disabled)";
+}
+
+void MainWindow::onScrollValueChanged()
+{
+    // スクロール時のアイコンロードを一時的に無効化（パフォーマンステスト）
+    // m_iconLoadTimer->start();
+    return; // 完全に無効化
+}
+
+void MainWindow::loadVisibleIcons()
+{
+    QElapsedTimer visibleTimer;
+    visibleTimer.start();
+    
+    qDebug() << "=== loadVisibleIcons START ===";
+    
+    if (m_appList.isEmpty() || !ui->listTreeWidget) {
+        qDebug() << "loadVisibleIcons: Empty app list or null widget";
+        return;
+    }
+    
+    QElapsedTimer itemAtTimer;
+    itemAtTimer.start();
+    
+    // QTreeWidgetの可視アイテム範囲を直接取得
+    QTreeWidgetItem *topItem = ui->listTreeWidget->itemAt(0, 0);
+    QTreeWidgetItem *bottomItem = ui->listTreeWidget->itemAt(0, ui->listTreeWidget->height() - 1);
+    
+    qDebug() << "itemAt() calls took:" << itemAtTimer.elapsed() << "ms";
+    
+    if (!topItem) topItem = ui->listTreeWidget->topLevelItem(0);
+    if (!bottomItem) bottomItem = ui->listTreeWidget->topLevelItem(ui->listTreeWidget->topLevelItemCount() - 1);
+    
+    if (!topItem || !bottomItem) {
+        qDebug() << "loadVisibleIcons: No visible items found";
+        return;
+    }
+    
+    int firstVisible = ui->listTreeWidget->indexOfTopLevelItem(topItem);
+    int lastVisible = ui->listTreeWidget->indexOfTopLevelItem(bottomItem);
+    
+    // 範囲を拡張（前後5個ずつ余裕をもって）
+    firstVisible = qMax(0, firstVisible - 5);
+    lastVisible = qMin(ui->listTreeWidget->topLevelItemCount() - 1, lastVisible + 5);
+    
+    qDebug() << "Visible range:" << firstVisible << "-" << lastVisible 
+             << "of" << ui->listTreeWidget->topLevelItemCount() << "items";
+    
+    // 表示範囲のアイコンのみロード
+    int processedCount = 0;
+    const int maxProcessPerCall = 100; // 表示範囲は一度に全て処理
+    
+    QElapsedTimer loadTimer;
+    loadTimer.start();
+    
+    for (int i = firstVisible; i <= lastVisible && processedCount < maxProcessPerCall; ++i) {
+        if (i >= 0 && i < ui->listTreeWidget->topLevelItemCount() && i < m_appList.size()) {
+            QElapsedTimer itemTimer;
+            itemTimer.start();
+            
+            QTreeWidgetItem *item = ui->listTreeWidget->topLevelItem(i);
+            if (item) {
+                loadIconForItem(item, m_appList[i]);
+                processedCount++;
+                
+                if (itemTimer.elapsed() > 5) {
+                    qDebug() << "loadIconForItem for index" << i << "took:" << itemTimer.elapsed() << "ms";
+                }
+            }
+        }
+    }
+    
+    qDebug() << "Icon loading loop took:" << loadTimer.elapsed() << "ms for" << processedCount << "items";
+    qDebug() << "=== loadVisibleIcons TOTAL took:" << visibleTimer.elapsed() << "ms ===";
+}
+
+void MainWindow::loadIconForItem(QTreeWidgetItem *item, const AppInfo &app)
+{
+    if (!item) return;
+    
+    // 現在のアイコン状態をチェック
+    QIcon currentIcon = item->icon(0);
+    bool hasIcon = !currentIcon.isNull();
+    
+    // アイコンが未設定の場合のみ、キャッシュから直接取得
+    if (!hasIcon) {
+        // キャッシュから直接取得（ファイルI/O一切なし）
+        if (m_iconCache32px.contains(app.path)) {
+            QIcon cachedIcon = m_iconCache32px.value(app.path);
+            item->setIcon(0, cachedIcon);
+            // qDebug() << "Set cached icon for:" << app.name; // ログ無効化で高速化
+        }
+        // キャッシュにない場合は何もしない（ファイルアクセス禁止）
     }
 }

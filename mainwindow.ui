@@ -607,6 +607,7 @@ QMenu::separator {
     <addaction name="actionListView"/>
     <addaction name="separator"/>
     <addaction name="actionRefresh"/>
+    <addaction name="actionClearIconCache"/>
    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
@@ -796,6 +797,14 @@ QProgressBar::chunk {
    </property>
    <property name="shortcut">
     <string>Ctrl+D</string>
+   </property>
+  </action>
+  <action name="actionClearIconCache">
+   <property name="text">
+    <string>アイコンキャッシュをクリア(&amp;C)</string>
+   </property>
+   <property name="toolTip">
+    <string>すべてのアイコンキャッシュをクリアして再構築します</string>
    </property>
   </action>
  </widget>

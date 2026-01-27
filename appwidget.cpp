@@ -599,12 +599,16 @@ void AppWidget::updateIcon()
     }
     // qDebug() << "Icon step 4 (Default) took:" << step4Timer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     
-    // アイコンサイズに合わせてスケール
-    QElapsedTimer scaleTimer;
-    scaleTimer.start();
+    // 軽量化したアイコンスケール処理（パフォーマンス最優先）
     if (!iconPixmap.isNull()) {
-        QPixmap scaledPixmap = iconPixmap.scaled(m_iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        // 高速なスケール: SmoothTransformationを無効化して高速化
+        QPixmap scaledPixmap = iconPixmap.scaled(m_iconSize, Qt::KeepAspectRatio, Qt::FastTransformation);
         
+        // 簡素な中央寄せ: 複雑な処理を削除して直接設定
+        m_iconLabel->setPixmap(scaledPixmap);
+        
+        // 以下の重い処理を無効化
+        /*
         // 中央寄せのために、ラベルサイズに合わせたPixmapを作成
         QPixmap centeredPixmap(m_iconSize);
         centeredPixmap.fill(Qt::transparent);
@@ -620,6 +624,7 @@ void AppWidget::updateIcon()
         painter.end();
         
         m_iconLabel->setPixmap(centeredPixmap);
+        */
     }
     // qDebug() << "Icon scaling took:" << scaleTimer.elapsed() << "ms for" << m_appInfo.name; // DISABLED for performance
     

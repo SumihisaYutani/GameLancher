@@ -4,6 +4,9 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
 
+# Disable reorder warnings for cleaner build output
+QMAKE_CXXFLAGS += -Wno-reorder
+
 # Windows specific libraries for icon extraction
 win32: LIBS += -lgdi32 -lshell32 -luser32
 

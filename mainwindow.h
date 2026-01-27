@@ -5,6 +5,7 @@
 #include <QGridLayout>
 #include <QTreeWidgetItem>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QProgressBar>
 #include <QLabel>
 #include "appinfo.h"
@@ -76,6 +77,7 @@ private slots:
     void onActionListView();
     void onActionRefresh();
     void onActionAbout();
+    void onActionClearIconCache();
     
     // その他
     void updateStatusBar();
@@ -134,11 +136,6 @@ private:
     int m_cachedColumns;
     int m_lastCalculatedWidth;
     
-    // UI応答性監視用
-    QTimer *m_responseTimer;
-    QElapsedTimer m_lastResponseTime;
-    bool m_isMonitoringResponse;
-    
     // ステータスバータイマー
     QTimer *m_statusTimer;
     QTimer *m_resizeTimer;
@@ -148,7 +145,39 @@ private:
     QLabel *m_loadingLabel;
     QTimer *m_loadTimer;
     QTimer *m_uiUpdateTimer;
+    
+    // UI応答性監視用
+    QTimer *m_responseTimer;
+    QElapsedTimer m_lastResponseTime;
+    
+    // ロード状態管理
     bool m_isLoading;
+    bool m_isMonitoringResponse;
+    
+    // 32pxアイコンキャッシュシステム
+    QMap<QString, QIcon> m_iconCache32px;
+    QIcon getOrCreateIcon32px(const QString &filePath);
+    void clearIconCache();
+    
+    // アイコンキャッシュの事前構築
+    void preloadAllIconsAsync(const QList<AppInfo> &apps);
+    void buildIconCacheStep();
+    void onIconCacheProgress();
+    void onIconCacheCompleted();
+    void setIconsStep(); // 段階的アイコン設定
+    
+    // オンデマンドアイコンローディング（キャッシュから取得）
+    void startAsyncIconLoading(const QList<AppInfo> &apps);
+    void loadVisibleIcons();
+    void onScrollValueChanged();
+    void loadIconForItem(QTreeWidgetItem *item, const AppInfo &app);
+    QList<AppInfo> m_appList; // アプリ情報のキャッシュ
+    QList<AppInfo> m_iconCacheQueue; // アイコンキャッシュ構築待ちキュー
+    QTimer *m_iconLoadTimer;
+    QTimer *m_iconCacheTimer;
+    QTimer *m_iconSetTimer; // アイコン設定用タイマー
+    int m_iconCacheProgress;
+    int m_iconSetProgress; // アイコン設定進行状況
 };
 
 #endif // MAINWINDOW_H
