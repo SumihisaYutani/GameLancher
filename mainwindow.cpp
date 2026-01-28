@@ -22,20 +22,17 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isGridView(false)
     , m_selectedAppId("")
     , m_gridLayout(nullptr)
-    , m_statusTimer(new QTimer(this))
+    , m_mainTimer(new QTimer(this))
     , m_resizeTimer(new QTimer(this))
     , m_progressBar(nullptr)
     , m_loadingLabel(nullptr)
     , m_loadTimer(new QTimer(this))
-    , m_uiUpdateTimer(new QTimer(this))
-    , m_responseTimer(new QTimer(this))
     , m_isLoading(false)
     , m_isMonitoringResponse(false)
-    , m_iconLoadTimer(new QTimer(this))
-    , m_iconCacheTimer(new QTimer(this))
-    , m_iconSetTimer(new QTimer(this))
+    , m_iconTimer(new QTimer(this))
     , m_iconCacheProgress(0)
     , m_iconSetProgress(0)
+    , m_currentIconTask(0)
 {
     ui->setupUi(this);
     setupConnections();
@@ -59,10 +56,10 @@ MainWindow::MainWindow(QWidget *parent)
     loadApplicationsAsync();
     updateStatusBar();
     
-    // ステータスバータイマーの設定
-    m_statusTimer->setInterval(1000); // 1秒間隔
-    connect(m_statusTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
-    m_statusTimer->start();
+    // 統合メインタイマーの設定（複数機能を統合してパフォーマンス向上）
+    m_mainTimer->setInterval(2000); // 2秒間隔に変更（CPUリソース節約）
+    connect(m_mainTimer, &QTimer::timeout, this, &MainWindow::updateStatusBar);
+    m_mainTimer->start();
     
     // リサイズタイマーの設定（スクロールパフォーマンス最適化）
     m_resizeTimer->setSingleShot(true);
@@ -76,11 +73,11 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
-    // タイマーを停止・削除
-    if (m_statusTimer) {
-        m_statusTimer->stop();
-        delete m_statusTimer;
-        m_statusTimer = nullptr;
+    // タイマーを停止・削除（統合最適化後）
+    if (m_mainTimer) {
+        m_mainTimer->stop();
+        delete m_mainTimer;
+        m_mainTimer = nullptr;
     }
     
     if (m_resizeTimer) {
@@ -95,10 +92,10 @@ MainWindow::~MainWindow()
         m_loadTimer = nullptr;
     }
     
-    if (m_uiUpdateTimer) {
-        m_uiUpdateTimer->stop();
-        delete m_uiUpdateTimer;
-        m_uiUpdateTimer = nullptr;
+    if (m_iconTimer) {
+        m_iconTimer->stop();
+        delete m_iconTimer;
+        m_iconTimer = nullptr;
     }
     
     // AppWidgetのクリア
@@ -205,28 +202,21 @@ void MainWindow::setupConnections()
     
     // ロード関連の接続
     connect(m_loadTimer, &QTimer::timeout, this, &MainWindow::onLoadingFinished);
-    connect(m_uiUpdateTimer, &QTimer::timeout, this, &MainWindow::onLoadingProgress);
     
-    // UI応答性監視の接続
-    connect(m_responseTimer, &QTimer::timeout, this, &MainWindow::checkUIResponse);
+    // UI応答性監視は削除（パフォーマンス最適化のため）
     
-    // アイコンローディングタイマーの設定
-    m_iconLoadTimer->setSingleShot(true);
-    m_iconLoadTimer->setInterval(100); // 100ms遅延でバッチ処理
-    connect(m_iconLoadTimer, &QTimer::timeout, this, &MainWindow::loadVisibleIcons);
+    // 統合アイコンタイマーの設定（パフォーマンス最適化）
+    m_iconTimer->setSingleShot(false);
+    m_iconTimer->setInterval(100); // 100ms間隔で統合処理
+    connect(m_iconTimer, &QTimer::timeout, this, [this]() {
+        switch(m_currentIconTask) {
+            case 0: buildIconCacheStep(); break;
+            case 1: setIconsStep(); break; 
+            case 2: loadVisibleIcons(); break;
+        }
+    });
     
-    // アイコンキャッシュ構築タイマーの設定
-    m_iconCacheTimer->setSingleShot(false);
-    m_iconCacheTimer->setInterval(50); // 50ms間隔でステップ実行
-    connect(m_iconCacheTimer, &QTimer::timeout, this, &MainWindow::buildIconCacheStep);
-    
-    // アイコン設定タイマーの設定（段階的設定用）
-    m_iconSetTimer->setSingleShot(false);
-    m_iconSetTimer->setInterval(50); // 50ms間隔でバランス良く設定
-    connect(m_iconSetTimer, &QTimer::timeout, this, &MainWindow::setIconsStep);
-    
-    // UI応答性監視を開始
-    startResponseMonitoring();
+    // UI応答性監視は削除（パフォーマンス最適化のため）
 }
 
 void MainWindow::loadApplications()
@@ -376,8 +366,16 @@ void MainWindow::updateListView()
     
     qDebug() << "LIST VIEW: Completed in" << listTimer.elapsed() << "ms for" << apps.size() << "apps (text-only)";
     
-    // アイコンキャッシュの事前構築を開始
-    preloadAllIconsAsync(apps);
+    // フィルタリング時は既存キャッシュを使用、初期表示時のみキャッシュ構築
+    if (m_currentFilter.isEmpty()) {
+        // 初期表示時のみアイコンキャッシュを構築
+        qDebug() << "Initial load - starting icon preload";
+        preloadAllIconsAsync(apps);
+    } else {
+        // フィルタリング時はアイコン処理をスキップ（高速化のため）
+        qDebug() << "Filtering - skipping icon processing for speed";
+        // アイコンは後でオンデマンド表示または一切表示しない
+    }
 }
 
 void MainWindow::clearGridView()
@@ -895,7 +893,7 @@ void MainWindow::onLoadingFinished()
     m_appManager->loadApps();
     qDebug() << "AppManager::loadApps() took:" << loadTimer.elapsed() << "ms";
     
-    m_uiUpdateTimer->stop();
+    // m_uiUpdateTimer は統合されて削除済み
     hideLoadingProgress();
     m_isLoading = false;
     
@@ -1035,19 +1033,22 @@ QIcon MainWindow::getOrCreateIcon32px(const QString &filePath)
     
     QIcon resultIcon;
     
-    // 1. 保存済みアイコンファイルを確認
+    // 1. 保存済みアイコンファイルを最優先で使用（登録時に生成済み）
     QString iconPath = m_iconExtractor->generateIconPath(filePath);
     if (QFileInfo::exists(iconPath)) {
         QPixmap pixmap(iconPath);
         if (!pixmap.isNull()) {
-            // 32pxにリサイズしてキャッシュ
+            // 32pxにリサイズしてキャッシュ（高速処理）
             QPixmap scaledPixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
             resultIcon = QIcon(scaledPixmap);
+            // 保存済みアイコンが見つかったので、他の重い処理をスキップ
+            m_iconCache32px[filePath] = resultIcon;
+            return resultIcon;
         }
     }
     
-    // 2. 保存済みアイコンがない場合、ファイルアイコンを使用
-    if (resultIcon.isNull() && QFileInfo::exists(filePath)) {
+    // 2. 保存済みアイコンがない場合、ファイルアイコンを取得
+    if (QFileInfo::exists(filePath)) {
         QFileIconProvider iconProvider;
         QFileInfo fileInfo(filePath);
         resultIcon = iconProvider.icon(fileInfo);
@@ -1137,24 +1138,16 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 }
 
 // UI応答性監視の実装
+// UI応答性監視機能は無効化（パフォーマンス最適化のため）
 void MainWindow::startResponseMonitoring()
 {
-    if (!m_isMonitoringResponse) {
-        m_isMonitoringResponse = true;
-        m_lastResponseTime.start();
-        m_responseTimer->setInterval(200); // 200ms毎にチェック（より細かく監視）
-        m_responseTimer->start();
-        qDebug() << "UI response monitoring started (200ms interval)";
-    }
+    // 無効化
+    qDebug() << "UI response monitoring disabled for performance";
 }
 
 void MainWindow::stopResponseMonitoring()
 {
-    if (m_isMonitoringResponse) {
-        m_isMonitoringResponse = false;
-        m_responseTimer->stop();
-        qDebug() << "UI response monitoring stopped";
-    }
+    // 無効化
 }
 
 void MainWindow::checkUIResponse()
@@ -1195,8 +1188,14 @@ void MainWindow::preloadAllIconsAsync(const QList<AppInfo> &apps)
     m_progressBar->setRange(0, apps.size());
     m_progressBar->setValue(0);
     
-    // バックグラウンドでキャッシュ構築を開始
-    m_iconCacheTimer->start();
+    // アイコンキャッシュをメモリに読み込み（ファイルは登録時に生成済み）
+    qDebug() << "Loading pre-generated icons into memory cache";
+    m_iconCacheQueue = apps;
+    m_iconCacheProgress = 0;
+    
+    // 高速アイコンキャッシュ構築（ファイルから読み込みのみ）
+    m_currentIconTask = 0; // キャッシュ読み込み
+    m_iconTimer->start();
 }
 
 void MainWindow::buildIconCacheStep()
@@ -1229,7 +1228,7 @@ void MainWindow::buildIconCacheStep()
         qDebug() << "=== CACHE CONSTRUCTION FINISHED ===";
         qDebug() << "Total processed:" << m_iconCacheProgress;
         qDebug() << "Cache size:" << m_iconCache32px.size();
-        m_iconCacheTimer->stop();
+        m_iconTimer->stop();
         qDebug() << "Timer stopped, calling onIconCacheCompleted()";
         onIconCacheCompleted();
     }
@@ -1250,11 +1249,12 @@ void MainWindow::onIconCacheCompleted()
     // 段階的アイコン設定を開始
     m_iconSetProgress = 0;
     
-    qDebug() << "Starting icon set timer with interval:" << m_iconSetTimer->interval() << "ms";
-    qDebug() << "Timer active before start:" << m_iconSetTimer->isActive();
-    m_iconSetTimer->start();
-    qDebug() << "Timer active after start:" << m_iconSetTimer->isActive();
-    qDebug() << "Timer remaining time:" << m_iconSetTimer->remainingTime();
+    qDebug() << "Starting unified icon timer with interval:" << m_iconTimer->interval() << "ms";
+    qDebug() << "Timer active before start:" << m_iconTimer->isActive();
+    m_currentIconTask = 1; // 設定フェーズ
+    m_iconTimer->start();
+    qDebug() << "Timer active after start:" << m_iconTimer->isActive();
+    qDebug() << "Timer remaining time:" << m_iconTimer->remainingTime();
     
     // 強制的にsetIconsStepを1回実行してテスト（デバッグ完了のため無効化）
     // qDebug() << "*** MANUAL TEST: Calling setIconsStep directly ***";
@@ -1340,7 +1340,7 @@ void MainWindow::setIconsStep()
         QElapsedTimer finishTimer;
         finishTimer.start();
         
-        m_iconSetTimer->stop();
+        m_iconTimer->stop();
         
         // プログレスバーを隠す
         m_loadingLabel->setVisible(false);
@@ -1378,7 +1378,7 @@ void MainWindow::startAsyncIconLoading(const QList<AppInfo> &apps)
 void MainWindow::onScrollValueChanged()
 {
     // スクロール時のアイコンロードを一時的に無効化（パフォーマンステスト）
-    // m_iconLoadTimer->start();
+    // アイコンロードは統合タイマーで処理
     return; // 完全に無効化
 }
 

@@ -1,9 +1,12 @@
 #include "appmanager.h"
+#include "iconextractor.h"
 #include <QDir>
 #include <QStandardPaths>
 #include <QApplication>
 #include <QJsonObject>
 #include <QFile>
+#include <QFileInfo>
+#include <QPixmap>
 #include <QDebug>
 
 AppManager::AppManager(QObject *parent)
@@ -37,11 +40,51 @@ bool AppManager::addApp(const AppInfo &app)
         return false;
     }
     
+    // アプリ追加時にアイコンキャッシュを生成（一度だけ）
+    AppInfo appWithIcon = app;
+    if (!app.iconPath.isEmpty() || !app.path.isEmpty()) {
+        // IconExtractorを使ってアイコンを生成・保存
+        IconExtractor iconExtractor;
+        QString iconPath = iconExtractor.generateIconPath(app.path);
+        
+        // アイコンファイルが存在しない場合のみ生成
+        if (!QFileInfo::exists(iconPath)) {
+            qDebug() << "Generating icon for new app:" << app.name;
+            QIcon extractedIcon = iconExtractor.extractIcon(app.path);
+            if (!extractedIcon.isNull()) {
+                // アイコンをファイルに保存
+                QPixmap pixmap = extractedIcon.pixmap(64, 64);
+                if (!pixmap.isNull()) {
+                    // アイコンディレクトリを作成
+                    QDir iconDir = QFileInfo(iconPath).absoluteDir();
+                    if (!iconDir.exists()) {
+                        iconDir.mkpath(".");
+                    }
+                    
+                    // アイコンファイルとして保存
+                    if (pixmap.save(iconPath, "PNG")) {
+                        appWithIcon.iconPath = iconPath;
+                        qDebug() << "Icon saved to:" << iconPath;
+                    } else {
+                        qWarning() << "Failed to save icon to:" << iconPath;
+                    }
+                } else {
+                    qWarning() << "Failed to convert icon to pixmap for:" << app.name;
+                }
+            } else {
+                qDebug() << "No icon extracted for:" << app.name;
+            }
+        } else {
+            appWithIcon.iconPath = iconPath;
+            qDebug() << "Using existing icon cache:" << iconPath;
+        }
+    }
+    
     qDebug() << "Adding app to list, current count:" << m_apps.size();
-    m_apps.append(app);
+    m_apps.append(appWithIcon);
     qDebug() << "App added, new count:" << m_apps.size();
     
-    emit appAdded(app);
+    emit appAdded(appWithIcon);
     qDebug() << "appAdded signal emitted";
     
     bool saveResult = saveApps();

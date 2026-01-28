@@ -136,18 +136,16 @@ private:
     int m_cachedColumns;
     int m_lastCalculatedWidth;
     
-    // ステータスバータイマー
-    QTimer *m_statusTimer;
-    QTimer *m_resizeTimer;
+    // 統合タイマー（パフォーマンス最適化）
+    QTimer *m_mainTimer; // メインタイマー - 複数機能を統合
+    QTimer *m_resizeTimer; // リサイズ専用（必要時のみ）
     
     // プログレスバーとロード状態管理
     QProgressBar *m_progressBar;
     QLabel *m_loadingLabel;
-    QTimer *m_loadTimer;
-    QTimer *m_uiUpdateTimer;
+    QTimer *m_loadTimer; // ロード完了検知
     
-    // UI応答性監視用
-    QTimer *m_responseTimer;
+    // UI応答性監視用（最適化）
     QElapsedTimer m_lastResponseTime;
     
     // ロード状態管理
@@ -166,18 +164,17 @@ private:
     void onIconCacheCompleted();
     void setIconsStep(); // 段階的アイコン設定
     
-    // オンデマンドアイコンローディング（キャッシュから取得）
+    // オンデマンドアイコンローディング（統合最適化）
     void startAsyncIconLoading(const QList<AppInfo> &apps);
     void loadVisibleIcons();
     void onScrollValueChanged();
     void loadIconForItem(QTreeWidgetItem *item, const AppInfo &app);
     QList<AppInfo> m_appList; // アプリ情報のキャッシュ
     QList<AppInfo> m_iconCacheQueue; // アイコンキャッシュ構築待ちキュー
-    QTimer *m_iconLoadTimer;
-    QTimer *m_iconCacheTimer;
-    QTimer *m_iconSetTimer; // アイコン設定用タイマー
+    QTimer *m_iconTimer; // 統合アイコンタイマー（キャッシュ+設定+ロード）
     int m_iconCacheProgress;
     int m_iconSetProgress; // アイコン設定進行状況
+    int m_currentIconTask; // 現在のタスク: 0=キャッシュ, 1=設定, 2=ロード
 };
 
 #endif // MAINWINDOW_H
