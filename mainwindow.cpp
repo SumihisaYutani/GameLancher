@@ -149,7 +149,7 @@ void MainWindow::setupConnections()
     
     // アイコンサイズをセル高に合わせて設定
     ui->listTreeWidget->setIconSize(QSize(32, 32)); // 40pxセルに合うサイズ
-    // ui->listTreeWidget->setUniformRowHeights(true); // スクロールパフォーマンス最適化のため無効化
+    ui->listTreeWidget->setUniformRowHeights(true); // スクロールパフォーマンス最適化のため無効化
     ui->listTreeWidget->setRootIsDecorated(false); // インデントなし
     
     // 緊急最適化: さらなるパフォーマンス向上
