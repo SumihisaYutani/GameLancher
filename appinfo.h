@@ -29,7 +29,8 @@ public:
     void fromJson(const QJsonObject &json);
     
     // 有効性チェック
-    bool isValid() const;
+    bool isValid() const;              // 高速版（ファイルチェックなし）
+    bool isValidWithFileCheck() const; // ファイル存在確認付き
     
     // 起動情報の更新
     void updateLaunchInfo();

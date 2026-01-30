@@ -71,6 +71,13 @@ void AppInfo::fromJson(const QJsonObject &json)
 
 bool AppInfo::isValid() const
 {
+    // ファイル存在チェックを除外（パフォーマンス最適化）
+    // 実際のファイル存在は起動時にのみ確認
+    return !name.isEmpty() && !path.isEmpty();
+}
+
+bool AppInfo::isValidWithFileCheck() const
+{
     return !name.isEmpty() && !path.isEmpty() && fileExists();
 }
 

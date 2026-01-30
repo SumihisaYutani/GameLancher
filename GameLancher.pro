@@ -25,7 +25,8 @@ SOURCES += \
     appwidget.cpp \
     categorymanager.cpp \
     appdiscovery.cpp \
-    appdiscoverydialog.cpp
+    appdiscoverydialog.cpp \
+    applistmodel.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -37,7 +38,8 @@ HEADERS += \
     appwidget.h \
     categorymanager.h \
     appdiscovery.h \
-    appdiscoverydialog.h
+    appdiscoverydialog.h \
+    applistmodel.h
 
 FORMS += \
     mainwindow.ui \

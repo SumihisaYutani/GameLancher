@@ -88,10 +88,7 @@ private:
     // フォルダオープンの制御
     QDateTime m_lastFolderOpenTime;
     static QDateTime s_globalLastFolderOpenTime; // 全AppWidgetで共有
-    
-    // アイコンキャッシュ（インスタンス単位）
-    QHash<QString, QPixmap> m_iconCache;
-    
+
     // 定数
     static const QSize DEFAULT_ICON_SIZE;
     static const QSize DEFAULT_WIDGET_SIZE;

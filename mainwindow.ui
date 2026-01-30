@@ -436,9 +436,9 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
          <number>0</number>
         </property>
         <item>
-         <widget class="QTreeWidget" name="listTreeWidget">
+         <widget class="QTableView" name="listTableView">
           <property name="styleSheet">
-           <string>QTreeWidget {
+           <string>QTableView {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
                                stop: 0 #ffffff, stop: 1 #f8fbff);
     border: 1px solid #b3d9ff;
@@ -451,19 +451,19 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     color: #333333;
 }
 
-QTreeWidget::item {
+QTableView::item {
     padding: 8px;
     border-bottom: 1px solid #e1f0ff;
     color: #333333;
 }
 
-QTreeWidget::item:hover {
+QTableView::item:hover {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
                                stop: 0 #e8f4fd, stop: 1 #e1f0ff);
     color: #1565c0;
 }
 
-QTreeWidget::item:selected {
+QTableView::item:selected {
     background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
                                stop: 0 #2196f3, stop: 1 #1976d2);
     color: #ffffff;
@@ -490,35 +490,18 @@ QHeaderView::section:hover {
     color: #0d47a1;
 }</string>
           </property>
-          <property name="rootIsDecorated">
+          <property name="showGrid">
            <bool>false</bool>
           </property>
           <property name="sortingEnabled">
            <bool>true</bool>
           </property>
-          <property name="columnCount">
-           <number>4</number>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
           </property>
-          <column>
-           <property name="text">
-            <string>アプリ名</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>パス</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>最終起動</string>
-           </property>
-          </column>
-          <column>
-           <property name="text">
-            <string>起動回数</string>
-           </property>
-          </column>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
+          </property>
          </widget>
         </item>
        </layout>
