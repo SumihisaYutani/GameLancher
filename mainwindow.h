@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QProgressBar>
 #include <QLabel>
+#include <QPushButton>
 #include "appinfo.h"
 #include "appmanager.h"
 #include "applauncher.h"
@@ -13,6 +14,7 @@
 #include "addappdialog.h"
 #include "appdiscoverydialog.h"
 #include "applistmodel.h"
+#include "appicondelegate.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -72,9 +74,19 @@ private slots:
     
     // その他
     void updateStatusBar();
-    
+
+    // ページネーション
+    void onFirstPageClicked();
+    void onPrevPageClicked();
+    void onNextPageClicked();
+    void onLastPageClicked();
+
+    // 列幅保存
+    void onColumnResized(int logicalIndex, int oldSize, int newSize);
 
 private:
+    void saveColumnWidths();
+    void restoreColumnWidths();
     void setupConnections();
     void loadApplications();
     void loadApplicationsAsync();
@@ -103,6 +115,7 @@ private:
     AppLauncher *m_appLauncher;
     IconExtractor *m_iconExtractor;
     AppListModel *m_appListModel;
+    AppIconDelegate *m_iconDelegate;
     
     // UI 状態
     bool m_isGridView;
@@ -122,9 +135,9 @@ private:
     // ロード状態管理
     bool m_isLoading;
     
-    // 32pxアイコンキャッシュシステム
-    QMap<QString, QIcon> m_iconCache32px;
-    QIcon getOrCreateIcon32px(const QString &filePath);
+    // 32pxアイコンキャッシュシステム（QPixmap使用で軽量化）
+    QMap<QString, QPixmap> m_iconCache32px;
+    QPixmap getOrCreateIcon32px(const QString &filePath);
     void clearIconCache();
     
     // アイコンキャッシュの事前構築
@@ -137,6 +150,19 @@ private:
     QList<AppInfo> m_iconCacheQueue; // アイコンキャッシュ構築待ちキュー
     QTimer *m_iconTimer; // アイコンキャッシュ構築用タイマー
     int m_iconCacheProgress;
+
+    // ページネーション
+    int m_currentPage;
+    int m_itemsPerPage;
+    int m_totalPages;
+    QPushButton *m_firstPageButton;
+    QPushButton *m_prevPageButton;
+    QPushButton *m_nextPageButton;
+    QPushButton *m_lastPageButton;
+    QLabel *m_pageInfoLabel;
+    void setupPagination();
+    void updatePageControls();
+    void displayCurrentPage();
 };
 
 #endif // MAINWINDOW_H

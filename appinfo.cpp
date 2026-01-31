@@ -85,6 +85,14 @@ void AppInfo::updateLaunchInfo()
 {
     lastLaunch = QDateTime::currentDateTime();
     launchCount++;
+    clearDisplayCache();  // キャッシュをクリア
+}
+
+void AppInfo::clearDisplayCache() const
+{
+    cachedLastLaunchStr.clear();
+    cachedLastLaunchTime = QDateTime();
+    cachedLaunchCountStr.clear();
 }
 
 bool AppInfo::fileExists() const

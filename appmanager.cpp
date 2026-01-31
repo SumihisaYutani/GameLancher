@@ -42,11 +42,17 @@ bool AppManager::addApp(const AppInfo &app)
     
     // アプリ追加時にアイコンキャッシュを生成（一度だけ）
     AppInfo appWithIcon = app;
-    if (!app.iconPath.isEmpty() || !app.path.isEmpty()) {
+
+    // 既にiconPathが設定されていてファイルが存在する場合はスキップ
+    if (!app.iconPath.isEmpty() && QFileInfo::exists(app.iconPath)) {
+        qDebug() << "Using provided icon path:" << app.iconPath;
+    } else if (!app.path.isEmpty()) {
         // IconExtractorを使ってアイコンを生成・保存
         IconExtractor iconExtractor;
-        QString iconPath = iconExtractor.generateIconPath(app.path);
-        
+        // アプリケーションディレクトリ/iconsを使用
+        QString iconDir = QApplication::applicationDirPath() + "/icons";
+        QString iconPath = iconExtractor.generateIconPath(app.path, iconDir);
+
         // アイコンファイルが存在しない場合のみ生成
         if (!QFileInfo::exists(iconPath)) {
             qDebug() << "Generating icon for new app:" << app.name;
@@ -273,6 +279,13 @@ bool AppManager::loadApps()
     QJsonArray appsArray = rootObj["apps"].toArray();
     
     m_apps.clear();
+
+    // アイコン保存用ディレクトリ
+    QString iconDir = QApplication::applicationDirPath() + "/icons";
+    QDir(iconDir).mkpath(".");
+    IconExtractor iconExtractor;
+    bool needsSave = false;
+
     for (const auto &value : appsArray) {
         if (value.isObject()) {
             AppInfo app;
@@ -281,13 +294,49 @@ bool AppManager::loadApps()
                 // 既存データのiconPath修正: exeファイルパスが設定されている場合は空にする
                 if (!app.iconPath.isEmpty() && app.iconPath.endsWith(".exe", Qt::CaseInsensitive)) {
                     qDebug() << "Fixing invalid iconPath for app:" << app.name;
-                    app.iconPath = ""; // 空にして後でIconExtractorで再生成させる
+                    app.iconPath = "";
                 }
+
+                // iconPathが空、存在しない、またはグレーアイコン（200バイト以下）の場合、アイコンを再生成
+                bool needsRegenerate = app.iconPath.isEmpty() || !QFileInfo::exists(app.iconPath);
+                if (!needsRegenerate && QFileInfo::exists(app.iconPath)) {
+                    QFileInfo iconInfo(app.iconPath);
+                    if (iconInfo.size() <= 200) {
+                        // グレーアイコン（小さいファイル）なので再生成
+                        needsRegenerate = true;
+                        QFile::remove(app.iconPath);  // 古いファイルを削除
+                    }
+                }
+
+                if (needsRegenerate) {
+                    QString iconPath = iconExtractor.generateIconPath(app.path, iconDir);
+                    // 既存の小さいファイルも削除
+                    if (QFileInfo::exists(iconPath) && QFileInfo(iconPath).size() <= 200) {
+                        QFile::remove(iconPath);
+                    }
+                    if (!QFileInfo::exists(iconPath)) {
+                        // アイコン抽出・保存
+                        if (iconExtractor.extractAndSaveIcon(app.path, iconPath)) {
+                            app.iconPath = iconPath;
+                            needsSave = true;
+                            qDebug() << "Generated icon for:" << app.name << "->" << iconPath;
+                        }
+                    } else {
+                        app.iconPath = iconPath;
+                        needsSave = true;
+                    }
+                }
+
                 m_apps.append(app);
             }
         }
     }
-    
+
+    // アイコンパスが更新された場合は保存
+    if (needsSave) {
+        saveApps();
+    }
+
     emit dataLoaded();
     qDebug() << "Loaded" << m_apps.size() << "applications";
     return true;

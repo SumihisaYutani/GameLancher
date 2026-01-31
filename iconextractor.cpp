@@ -7,6 +7,7 @@
 #include <QImageWriter>
 #include <QCryptographicHash>
 #include <QStyle>
+#include <QFileIconProvider>
 
 #ifdef Q_OS_WIN
 // Windows specific includes for icon extraction
@@ -35,20 +36,31 @@ QIcon IconExtractor::extractIcon(const QString &executablePath)
 #ifdef Q_OS_WIN
     QIcon icon = extractWin32Icon(executablePath);
     if (!icon.isNull()) {
+        qDebug() << "Successfully extracted icon using Win32 API:" << executablePath;
         return icon;
     }
 #endif
-    
-    // フォールバック: Qt標準のファイルアイコン
-    QFileInfo fileInfo(executablePath);
-    QIcon fileIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
-    
-    if (fileIcon.isNull()) {
-        fileIcon = getDefaultApplicationIcon();
+
+    // フォールバック1: QFileIconProvider
+    QFileIconProvider iconProvider;
+    QIcon fileIcon = iconProvider.icon(QFileInfo(executablePath));
+    if (!fileIcon.isNull()) {
+        QPixmap testPixmap = fileIcon.pixmap(32, 32);
+        if (!testPixmap.isNull()) {
+            qDebug() << "Using QFileIconProvider icon for:" << executablePath;
+            return fileIcon;
+        }
     }
-    
-    qDebug() << "Using fallback icon for:" << executablePath;
-    return fileIcon;
+
+    // フォールバック2: Qt標準のファイルアイコン
+    fileIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    if (!fileIcon.isNull()) {
+        qDebug() << "Using standard icon for:" << executablePath;
+        return fileIcon;
+    }
+
+    qDebug() << "Using default application icon for:" << executablePath;
+    return getDefaultApplicationIcon();
 }
 
 QPixmap IconExtractor::extractIconPixmap(const QString &executablePath, const QSize &size)
@@ -63,8 +75,43 @@ bool IconExtractor::saveIcon(const QIcon &icon, const QString &savePath)
         qWarning() << "Cannot save null icon to:" << savePath;
         return false;
     }
-    
-    QPixmap pixmap = icon.pixmap(m_defaultIconSize);
+
+    QPixmap pixmap;
+
+    // 複数のサイズを試す（大きいサイズから）
+    QList<QSize> sizesToTry = {QSize(48, 48), QSize(64, 64), QSize(32, 32), QSize(256, 256), QSize(128, 128)};
+    for (const QSize &size : sizesToTry) {
+        pixmap = icon.pixmap(size);
+        if (!pixmap.isNull()) {
+            qDebug() << "Got pixmap at size:" << size << "for:" << savePath;
+            break;
+        }
+    }
+
+    // まだnullなら、利用可能なサイズを試す
+    if (pixmap.isNull()) {
+        QList<QSize> sizes = icon.availableSizes();
+        qDebug() << "Available sizes:" << sizes << "for:" << savePath;
+        for (const QSize &size : sizes) {
+            pixmap = icon.pixmap(size);
+            if (!pixmap.isNull()) {
+                break;
+            }
+        }
+    }
+
+    // pixmapを32x32にスケール
+    if (!pixmap.isNull() && pixmap.size() != m_defaultIconSize) {
+        pixmap = pixmap.scaled(m_defaultIconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+
+    // それでもnullなら、デフォルトアイコンを作成
+    if (pixmap.isNull()) {
+        qWarning() << "Creating default gray icon for:" << savePath;
+        pixmap = QPixmap(m_defaultIconSize);
+        pixmap.fill(QColor(200, 200, 200));
+    }
+
     return saveIconPixmap(pixmap, savePath);
 }
 
@@ -264,47 +311,58 @@ QPixmap IconExtractor::convertHIconToPixmap(HICON hIcon)
 HICON IconExtractor::extractWin32IconHandle(const QString &executablePath, int iconSize)
 {
     std::wstring wPath = executablePath.toStdWString();
-    
-    // 大きいアイコンと小さいアイコンを取得
+
+    // 方法1: ExtractIconExを使用してアイコンを抽出
     HICON hIconLarge = nullptr;
     HICON hIconSmall = nullptr;
-    
-    // ExtractIconExを使用してアイコンを抽出
+
     UINT iconCount = ExtractIconExW(wPath.c_str(), 0, &hIconLarge, &hIconSmall, 1);
-    
+
     if (iconCount > 0) {
-        // サイズに応じてアイコンを選択
         HICON hIcon = (iconSize > 16) ? hIconLarge : hIconSmall;
-        
-        // 使わない方のアイコンを解放
         if (hIconLarge && hIcon != hIconLarge) {
             DestroyIcon(hIconLarge);
         }
         if (hIconSmall && hIcon != hIconSmall) {
             DestroyIcon(hIconSmall);
         }
-        
+        if (hIcon) {
+            return hIcon;
+        }
+    }
+
+    // 方法2: ExtractIconを使用（インデックス0）
+    HICON hIcon = ExtractIconW(GetModuleHandle(nullptr), wPath.c_str(), 0);
+    if (hIcon && hIcon != (HICON)1) {
         return hIcon;
     }
-    
-    // フォールバック: SHGetFileInfoを使用
+
+    // 方法3: SHGetFileInfoを使用（実際のファイルから取得）
     SHFILEINFOW fileInfo;
     ZeroMemory(&fileInfo, sizeof(fileInfo));
-    
-    DWORD flags = SHGFI_ICON | SHGFI_USEFILEATTRIBUTES;
+
+    DWORD flags = SHGFI_ICON;
     if (iconSize <= 16) {
         flags |= SHGFI_SMALLICON;
     } else {
         flags |= SHGFI_LARGEICON;
     }
-    
-    DWORD_PTR result = SHGetFileInfoW(wPath.c_str(), FILE_ATTRIBUTE_NORMAL, &fileInfo, 
-                                      sizeof(fileInfo), flags);
-    
+
+    DWORD_PTR result = SHGetFileInfoW(wPath.c_str(), 0, &fileInfo, sizeof(fileInfo), flags);
+
     if (result && fileInfo.hIcon) {
         return fileInfo.hIcon;
     }
-    
+
+    // 方法4: SHGetFileInfoでファイル属性ベースのアイコン取得
+    ZeroMemory(&fileInfo, sizeof(fileInfo));
+    flags = SHGFI_ICON | SHGFI_USEFILEATTRIBUTES | SHGFI_LARGEICON;
+    result = SHGetFileInfoW(wPath.c_str(), FILE_ATTRIBUTE_NORMAL, &fileInfo, sizeof(fileInfo), flags);
+
+    if (result && fileInfo.hIcon) {
+        return fileInfo.hIcon;
+    }
+
     return nullptr;
 }
 #endif

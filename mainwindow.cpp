@@ -13,6 +13,9 @@
 #include <QElapsedTimer>
 #include <QFileIconProvider>
 #include <QTableView>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
+#include <QSettings>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -31,14 +34,46 @@ MainWindow::MainWindow(QWidget *parent)
     , m_isLoading(false)
     , m_iconTimer(new QTimer(this))
     , m_iconCacheProgress(0)
+    , m_currentPage(0)
+    , m_itemsPerPage(50)
+    , m_totalPages(0)
+    , m_firstPageButton(nullptr)
+    , m_prevPageButton(nullptr)
+    , m_nextPageButton(nullptr)
+    , m_lastPageButton(nullptr)
+    , m_pageInfoLabel(nullptr)
 {
     ui->setupUi(this);
     setupConnections();
     setupProgressBar();
+    setupPagination();
 
     // モデルの設定
     m_appListModel->setIconCache(&m_iconCache32px);
     ui->listTableView->setModel(m_appListModel);
+
+    // カスタムデリゲートでアイコンを直接描画（QIcon/QPixmapを経由しない）
+    m_iconDelegate = new AppIconDelegate(this);
+    ui->listTableView->setItemDelegate(m_iconDelegate);
+
+    // 列ヘッダー設定（モデル設定後に行う必要あり）
+    QHeaderView *header = ui->listTableView->horizontalHeader();
+    header->setStretchLastSection(false);
+    header->setSectionResizeMode(0, QHeaderView::Interactive);  // アプリ名
+    header->setSectionResizeMode(1, QHeaderView::Stretch);       // パス
+    header->setSectionResizeMode(2, QHeaderView::Interactive);   // 最終起動
+    header->setSectionResizeMode(3, QHeaderView::Interactive);   // 起動回数
+
+    // デフォルトの列幅を設定
+    header->resizeSection(0, 200);
+    header->resizeSection(2, 100);
+    header->resizeSection(3, 80);
+
+    // 保存された列幅を復元
+    restoreColumnWidths();
+
+    // 列幅変更時に保存
+    connect(header, &QHeaderView::sectionResized, this, &MainWindow::onColumnResized);
     
     // 初期状態をリストビューに変更（軽量表示のため）
     m_isGridView = false;
@@ -75,6 +110,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    // 列幅を保存
+    saveColumnWidths();
+
     // タイマーを停止・削除（統合最適化後）
     if (m_mainTimer) {
         m_mainTimer->stop();
@@ -127,46 +165,36 @@ void MainWindow::setupConnections()
     connect(ui->settingsButton, &QPushButton::clicked, this, &MainWindow::onSettingsButtonClicked);
     connect(ui->viewModeButton, &QToolButton::clicked, this, &MainWindow::onViewModeButtonClicked);
     
-    // 検索（リアルタイム検索を無効化）
-    // connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
-    
-    // 絞り込みボタン
-    connect(ui->filterButton, &QPushButton::clicked, this, &MainWindow::onFilterButtonClicked);
-    
-    // Enterキーでも絞り込み実行
-    connect(ui->searchLineEdit, &QLineEdit::returnPressed, this, &MainWindow::onFilterButtonClicked);
+    // 検索機能は削除（パフォーマンス改善のため）
     
     // リストビューイベント（QTableView）
     connect(ui->listTableView, &QTableView::clicked, this, &MainWindow::onListItemClicked);
     connect(ui->listTableView, &QTableView::doubleClicked, this, &MainWindow::onListItemDoubleClicked);
 
-    // QTableViewの設定
+    // QTableViewの設定（パフォーマンス最適化）
     ui->listTableView->setIconSize(QSize(32, 32));
     ui->listTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
     ui->listTableView->setSelectionMode(QAbstractItemView::SingleSelection);
     ui->listTableView->setAlternatingRowColors(false);
     ui->listTableView->setShowGrid(false);
+    ui->listTableView->setSortingEnabled(false);  // ソート無効でパフォーマンス改善
+    ui->listTableView->setUpdatesEnabled(true);
 
-    // スクロールパフォーマンス最適化
+    // ページネーション用：スクロールバーを非表示
+    ui->listTableView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->listTableView->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     ui->listTableView->setVerticalScrollMode(QAbstractItemView::ScrollPerItem);
     ui->listTableView->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     ui->listTableView->setAutoScroll(false);
     ui->listTableView->setWordWrap(false);
 
-    // 行ヘッダー非表示、行高さ固定
+    // 行ヘッダー非表示、行高さ固定（パフォーマンス重要）
     ui->listTableView->verticalHeader()->setVisible(false);
     ui->listTableView->verticalHeader()->setDefaultSectionSize(40);
     ui->listTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    ui->listTableView->verticalHeader()->setMinimumSectionSize(40);
+    ui->listTableView->verticalHeader()->setMaximumSectionSize(40);
 
-    // 列ヘッダー設定
-    QHeaderView *header = ui->listTableView->horizontalHeader();
-    header->setStretchLastSection(false);
-    header->setSectionResizeMode(0, QHeaderView::Interactive);
-    header->setSectionResizeMode(1, QHeaderView::Stretch);
-    header->setSectionResizeMode(2, QHeaderView::ResizeToContents);
-    header->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    header->resizeSection(0, 200);
-    
     // アプリケーション管理イベント
     connect(m_appManager, &AppManager::appAdded, this, &MainWindow::onAppAdded);
     connect(m_appManager, &AppManager::appsAdded, this, &MainWindow::onAppsAdded);
@@ -260,33 +288,11 @@ void MainWindow::updateListView()
 {
     if (m_isLoading) return;
 
-    QElapsedTimer listTimer;
-    listTimer.start();
-
-    // フィルタリング
+    // シンプルにアプリ一覧を取得して表示
     QList<AppInfo> apps = m_appManager->getApps();
-    if (!m_currentFilter.isEmpty()) {
-        apps = m_appManager->searchApps(m_currentFilter);
-    }
-
-    // アプリ情報をキャッシュ
     m_appList = apps;
-
-    qDebug() << "LIST VIEW: Processing" << apps.size() << "apps (model-based)";
-
-    // モデルにデータを設定（一括更新）
     m_appListModel->setApps(apps);
-
-    qDebug() << "LIST VIEW: Completed in" << listTimer.elapsed() << "ms for" << apps.size() << "apps";
-
-    // フィルタリング時は既存キャッシュを使用、初期表示時のみキャッシュ構築
-    if (m_currentFilter.isEmpty() && !apps.isEmpty()) {
-        qDebug() << "Initial load - starting icon preload";
-        preloadAllIconsAsync(apps);
-    } else if (!m_currentFilter.isEmpty()) {
-        // フィルタリング時はアイコン再描画を通知
-        m_appListModel->notifyAllIconsUpdated();
-    }
+    updatePageControls();
 }
 
 void MainWindow::clearListView()
@@ -297,16 +303,7 @@ void MainWindow::clearListView()
 void MainWindow::updateAppCount()
 {
     int totalCount = m_appManager->getAppCount();
-    int filteredCount = m_currentFilter.isEmpty() ? totalCount : m_appManager->searchApps(m_currentFilter).size();
-    
-    QString text;
-    if (m_currentFilter.isEmpty()) {
-        text = QString("登録アプリ: %1個").arg(totalCount);
-    } else {
-        text = QString("登録アプリ: %1個 (フィルタ結果: %2個)").arg(totalCount).arg(filteredCount);
-    }
-    
-    ui->appCountLabel->setText(text);
+    ui->appCountLabel->setText(QString("登録アプリ: %1個").arg(totalCount));
 }
 
 void MainWindow::filterApplications()
@@ -392,8 +389,7 @@ void MainWindow::onSearchTextChanged()
 
 void MainWindow::onFilterButtonClicked()
 {
-    m_currentFilter = ui->searchLineEdit->text().trimmed();
-    filterApplications();
+    // 検索機能は削除（パフォーマンス改善のため）
 }
 
 
@@ -417,7 +413,10 @@ void MainWindow::onListItemDoubleClicked(const QModelIndex &index)
 // アプリ管理イベント
 void MainWindow::onAppAdded(const AppInfo &app)
 {
-    Q_UNUSED(app)
+    // 新しいアイコンのキャッシュをクリア
+    if (!app.iconPath.isEmpty()) {
+        m_iconDelegate->clearCacheFor(app.iconPath);
+    }
     refreshViews();
     updateAppCount();
 }
@@ -444,6 +443,10 @@ void MainWindow::onAppRemoved(const QString &appId)
 
 void MainWindow::onAppUpdated(const AppInfo &app)
 {
+    // 更新されたアイコンのキャッシュをクリア
+    if (!app.iconPath.isEmpty()) {
+        m_iconDelegate->clearCacheFor(app.iconPath);
+    }
     // モデルを通じて更新
     m_appListModel->updateApp(app);
     updateStatusBar();
@@ -575,7 +578,7 @@ void MainWindow::showAppContextMenu(const QString &appId, const QPoint &globalPo
 {
     Q_UNUSED(appId)
     Q_UNUSED(globalPos)
-    // AppWidgetで実装済み
+    // 未使用
 }
 
 void MainWindow::editApplication(const QString &appId)
@@ -753,46 +756,47 @@ void MainWindow::onLoadingProgress()
 }
 
 
-// 32pxアイコンキャッシュシステムの実装
-QIcon MainWindow::getOrCreateIcon32px(const QString &filePath)
+// 32pxアイコンキャッシュシステムの実装（QPixmap版で軽量化）
+QPixmap MainWindow::getOrCreateIcon32px(const QString &filePath)
 {
-    // キャッシュにあるかチェック
-    if (m_iconCache32px.contains(filePath)) {
-        return m_iconCache32px[filePath];
+    // キャッシュにあるかチェック（constFindで1回の検索）
+    auto it = m_iconCache32px.constFind(filePath);
+    if (it != m_iconCache32px.constEnd()) {
+        return *it;
     }
-    
-    QIcon resultIcon;
-    
+
+    QPixmap resultPixmap;
+
     // 1. 保存済みアイコンファイルを最優先で使用（登録時に生成済み）
     QString iconPath = m_iconExtractor->generateIconPath(filePath);
     if (QFileInfo::exists(iconPath)) {
         QPixmap pixmap(iconPath);
         if (!pixmap.isNull()) {
-            // 32pxにリサイズしてキャッシュ（高速処理）
-            QPixmap scaledPixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
-            resultIcon = QIcon(scaledPixmap);
-            // 保存済みアイコンが見つかったので、他の重い処理をスキップ
-            m_iconCache32px[filePath] = resultIcon;
-            return resultIcon;
+            resultPixmap = pixmap.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
+            m_iconCache32px.insert(filePath, resultPixmap);
+            return resultPixmap;
         }
     }
-    
+
     // 2. 保存済みアイコンがない場合、ファイルアイコンを取得
     if (QFileInfo::exists(filePath)) {
-        QFileIconProvider iconProvider;
+        static QFileIconProvider s_iconProvider;
         QFileInfo fileInfo(filePath);
-        resultIcon = iconProvider.icon(fileInfo);
+        QIcon fileIcon = s_iconProvider.icon(fileInfo);
+        if (!fileIcon.isNull()) {
+            resultPixmap = fileIcon.pixmap(32, 32);
+        }
     }
-    
+
     // 3. それでもない場合はデフォルトアイコン
-    if (resultIcon.isNull()) {
-        resultIcon = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon);
+    if (resultPixmap.isNull()) {
+        resultPixmap = QApplication::style()->standardIcon(QStyle::SP_ComputerIcon).pixmap(32, 32);
     }
-    
+
     // キャッシュに保存
-    m_iconCache32px[filePath] = resultIcon;
-    
-    return resultIcon;
+    m_iconCache32px.insert(filePath, resultPixmap);
+
+    return resultPixmap;
 }
 
 // アイコンキャッシュをクリア
@@ -887,10 +891,223 @@ void MainWindow::onIconCacheCompleted()
     m_loadingLabel->setVisible(false);
     m_progressBar->setVisible(false);
 
-    // 全アイコン更新を通知（モデルが自動的にキャッシュからアイコンを取得）
-    m_appListModel->notifyAllIconsUpdated();
+    // 現在のページを再表示（アイコン更新のため）
+    displayCurrentPage();
 
     qDebug() << "All icons ready from cache";
 }
 
+// ページネーション関連
+void MainWindow::setupPagination()
+{
+    // ページナビゲーション用のウィジェットを作成
+    QWidget *paginationWidget = new QWidget(this);
+    QHBoxLayout *layout = new QHBoxLayout(paginationWidget);
+    layout->setContentsMargins(10, 5, 10, 5);
+    layout->setSpacing(5);
 
+    // 最初へボタン
+    m_firstPageButton = new QPushButton("<<", paginationWidget);
+    m_firstPageButton->setFixedWidth(40);
+    m_firstPageButton->setToolTip("最初のページ");
+    connect(m_firstPageButton, &QPushButton::clicked, this, &MainWindow::onFirstPageClicked);
+
+    // 前へボタン
+    m_prevPageButton = new QPushButton("<", paginationWidget);
+    m_prevPageButton->setFixedWidth(40);
+    m_prevPageButton->setToolTip("前のページ");
+    connect(m_prevPageButton, &QPushButton::clicked, this, &MainWindow::onPrevPageClicked);
+
+    // ページ情報ラベル
+    m_pageInfoLabel = new QLabel("0 / 0 ページ", paginationWidget);
+    m_pageInfoLabel->setAlignment(Qt::AlignCenter);
+    m_pageInfoLabel->setMinimumWidth(120);
+
+    // 次へボタン
+    m_nextPageButton = new QPushButton(">", paginationWidget);
+    m_nextPageButton->setFixedWidth(40);
+    m_nextPageButton->setToolTip("次のページ");
+    connect(m_nextPageButton, &QPushButton::clicked, this, &MainWindow::onNextPageClicked);
+
+    // 最後へボタン
+    m_lastPageButton = new QPushButton(">>", paginationWidget);
+    m_lastPageButton->setFixedWidth(40);
+    m_lastPageButton->setToolTip("最後のページ");
+    connect(m_lastPageButton, &QPushButton::clicked, this, &MainWindow::onLastPageClicked);
+
+    // レイアウトに追加
+    layout->addStretch();
+    layout->addWidget(m_firstPageButton);
+    layout->addWidget(m_prevPageButton);
+    layout->addWidget(m_pageInfoLabel);
+    layout->addWidget(m_nextPageButton);
+    layout->addWidget(m_lastPageButton);
+    layout->addStretch();
+
+    // リストビューページのレイアウトに追加
+    QVBoxLayout *listViewLayout = qobject_cast<QVBoxLayout*>(ui->listViewPage->layout());
+    if (listViewLayout) {
+        listViewLayout->addWidget(paginationWidget);
+    }
+
+    // スタイル設定
+    QString buttonStyle = R"(
+        QPushButton {
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #ffffff, stop: 1 #f8fbff);
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 5px;
+            font-weight: bold;
+            color: #1565c0;
+        }
+        QPushButton:hover {
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #e3f2fd, stop: 1 #bbdefb);
+            border-color: #2196f3;
+        }
+        QPushButton:pressed {
+            background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                       stop: 0 #bbdefb, stop: 1 #90caf9);
+        }
+        QPushButton:disabled {
+            background-color: #f5f5f5;
+            color: #999999;
+            border-color: #d5d5d5;
+        }
+    )";
+
+    m_firstPageButton->setStyleSheet(buttonStyle);
+    m_prevPageButton->setStyleSheet(buttonStyle);
+    m_nextPageButton->setStyleSheet(buttonStyle);
+    m_lastPageButton->setStyleSheet(buttonStyle);
+
+    updatePageControls();
+}
+
+void MainWindow::updatePageControls()
+{
+    int currentPage = m_appListModel->currentPage();
+    int totalPages = m_appListModel->totalPages();
+
+    bool hasPrev = currentPage > 0;
+    bool hasNext = currentPage < totalPages - 1;
+
+    m_firstPageButton->setEnabled(hasPrev);
+    m_prevPageButton->setEnabled(hasPrev);
+    m_nextPageButton->setEnabled(hasNext);
+    m_lastPageButton->setEnabled(hasNext);
+
+    if (totalPages > 0) {
+        m_pageInfoLabel->setText(QString("%1 / %2 ページ").arg(currentPage + 1).arg(totalPages));
+    } else {
+        m_pageInfoLabel->setText("0 / 0 ページ");
+    }
+}
+
+void MainWindow::displayCurrentPage()
+{
+    // モデル内蔵のページング使用 - ページコントロールの更新のみ
+    updatePageControls();
+}
+
+void MainWindow::onFirstPageClicked()
+{
+    m_appListModel->setPage(0);
+    updatePageControls();
+}
+
+void MainWindow::onPrevPageClicked()
+{
+    int currentPage = m_appListModel->currentPage();
+    if (currentPage > 0) {
+        m_appListModel->setPage(currentPage - 1);
+        updatePageControls();
+    }
+}
+
+void MainWindow::onNextPageClicked()
+{
+    int currentPage = m_appListModel->currentPage();
+    int totalPages = m_appListModel->totalPages();
+    if (currentPage < totalPages - 1) {
+        m_appListModel->setPage(currentPage + 1);
+        updatePageControls();
+    }
+}
+
+void MainWindow::onLastPageClicked()
+{
+    int totalPages = m_appListModel->totalPages();
+    if (totalPages > 0) {
+        m_appListModel->setPage(totalPages - 1);
+        updatePageControls();
+    }
+}
+
+// 列幅保存・復元
+void MainWindow::onColumnResized(int logicalIndex, int oldSize, int newSize)
+{
+    Q_UNUSED(oldSize)
+    Q_UNUSED(newSize)
+    Q_UNUSED(logicalIndex)
+
+    // 列幅変更時に保存（遅延保存で頻繁な書き込みを防ぐ）
+    static QTimer *saveTimer = nullptr;
+    if (!saveTimer) {
+        saveTimer = new QTimer(this);
+        saveTimer->setSingleShot(true);
+        saveTimer->setInterval(500);  // 500ms後に保存
+        connect(saveTimer, &QTimer::timeout, this, &MainWindow::saveColumnWidths);
+    }
+    saveTimer->start();
+}
+
+void MainWindow::saveColumnWidths()
+{
+    QHeaderView *header = ui->listTableView->horizontalHeader();
+    if (!header || header->count() == 0) {
+        qDebug() << "saveColumnWidths: No header or no columns";
+        return;
+    }
+
+    QSettings settings("GameLauncher", "GameLauncher");
+    settings.beginGroup("ColumnWidths");
+    for (int i = 0; i < header->count(); ++i) {
+        int width = header->sectionSize(i);
+        settings.setValue(QString("column_%1").arg(i), width);
+        qDebug() << "Saved column" << i << "width:" << width;
+    }
+    settings.endGroup();
+    settings.sync();  // 即座に書き込み
+
+    qDebug() << "Column widths saved to:" << settings.fileName();
+}
+
+void MainWindow::restoreColumnWidths()
+{
+    QHeaderView *header = ui->listTableView->horizontalHeader();
+    if (!header || header->count() == 0) {
+        qDebug() << "restoreColumnWidths: No header or no columns";
+        return;
+    }
+
+    QSettings settings("GameLauncher", "GameLauncher");
+    qDebug() << "Restoring column widths from:" << settings.fileName();
+
+    settings.beginGroup("ColumnWidths");
+    QStringList keys = settings.childKeys();
+    qDebug() << "Found keys:" << keys;
+
+    for (int i = 0; i < header->count(); ++i) {
+        QString key = QString("column_%1").arg(i);
+        if (settings.contains(key)) {
+            int width = settings.value(key).toInt();
+            if (width > 20) {  // 最小幅チェック
+                header->resizeSection(i, width);
+                qDebug() << "Restored column" << i << "width:" << width;
+            }
+        }
+    }
+    settings.endGroup();
+}

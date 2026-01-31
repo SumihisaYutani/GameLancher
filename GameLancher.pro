@@ -22,11 +22,11 @@ SOURCES += \
     applauncher.cpp \
     iconextractor.cpp \
     addappdialog.cpp \
-    appwidget.cpp \
     categorymanager.cpp \
     appdiscovery.cpp \
     appdiscoverydialog.cpp \
-    applistmodel.cpp
+    applistmodel.cpp \
+    appicondelegate.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -35,11 +35,11 @@ HEADERS += \
     applauncher.h \
     iconextractor.h \
     addappdialog.h \
-    appwidget.h \
     categorymanager.h \
     appdiscovery.h \
     appdiscoverydialog.h \
-    applistmodel.h
+    applistmodel.h \
+    appicondelegate.h
 
 FORMS += \
     mainwindow.ui \

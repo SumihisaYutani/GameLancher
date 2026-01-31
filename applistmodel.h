@@ -2,8 +2,9 @@
 #define APPLISTMODEL_H
 
 #include <QAbstractTableModel>
-#include <QIcon>
+#include <QPixmap>
 #include <QMap>
+#include <functional>
 #include "appinfo.h"
 
 class AppListModel : public QAbstractTableModel
@@ -21,7 +22,8 @@ public:
 
     enum CustomRole {
         AppIdRole = Qt::UserRole,
-        AppPathRole = Qt::UserRole + 1
+        AppPathRole = Qt::UserRole + 1,
+        IconPathRole = Qt::UserRole + 2
     };
 
     explicit AppListModel(QObject *parent = nullptr);
@@ -46,8 +48,9 @@ public:
     AppInfo getApp(int row) const;
     int appCount() const;
 
-    // Icon management
-    void setIconCache(QMap<QString, QIcon> *iconCache);
+    // Icon management (QPixmap for performance)
+    void setIconCache(QMap<QString, QPixmap> *iconCache);
+    void setIconLoader(std::function<QPixmap(const QString&)> loader);
     void notifyIconUpdated(int row);
     void notifyAllIconsUpdated();
 
@@ -55,9 +58,25 @@ public:
     static QString formatLastLaunch(const QDateTime &dateTime);
     static QString formatLaunchCount(int count);
 
+    // Pagination
+    void setPage(int page);
+    void setItemsPerPage(int count);
+    int currentPage() const { return m_currentPage; }
+    int itemsPerPage() const { return m_itemsPerPage; }
+    int totalPages() const;
+    int totalItems() const { return m_apps.size(); }
+
 private:
     QList<AppInfo> m_apps;
-    QMap<QString, QIcon> *m_iconCache;
+    QMap<QString, QPixmap> *m_iconCache;
+    std::function<QPixmap(const QString&)> m_iconLoader;
+
+    // Pagination
+    int m_currentPage;
+    int m_itemsPerPage;
+
+    // Helper to get actual index in m_apps
+    int actualIndex(int row) const;
 };
 
 #endif // APPLISTMODEL_H

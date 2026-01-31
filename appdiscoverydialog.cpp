@@ -367,26 +367,38 @@ void AppDiscoveryDialog::addAppToResults(AppInfo &app)
         }
     }
 
-    // 3. QFileIconProviderを使用してファイル固有アイコンを取得
+    // 3. QFileIconProviderを使用してファイル固有アイコンを取得し、ファイルに保存
     if (!iconLoaded && QFileInfo::exists(app.path)) {
         QFileIconProvider iconProvider;
         QFileInfo fileInfo(app.path);
-        
+
         // ファイル固有のアイコンを取得
         QIcon fileIcon = iconProvider.icon(fileInfo);
         if (!fileIcon.isNull()) {
             iconPixmap = fileIcon.pixmap(QSize(48, 48));
             if (!iconPixmap.isNull()) {
-                qDebug() << "Extracted file-specific icon using QFileIconProvider from:" << app.path;
-                m_iconCacheForPath[app.path] = iconPixmap; // キャッシュに保存
-                iconLoaded = true;
+                // アイコンをファイルに保存
+                IconExtractor iconExtractor;
+                QString iconSavePath = iconExtractor.generateIconPath(app.path);
+
+                // 保存先ディレクトリを作成
+                QDir().mkpath(QFileInfo(iconSavePath).absolutePath());
+
+                if (iconPixmap.save(iconSavePath, "PNG")) {
+                    qDebug() << "Saved QFileIconProvider icon to:" << iconSavePath;
+                    app.iconPath = iconSavePath;
+                    m_iconCacheForPath[app.path] = iconPixmap;
+                    iconLoaded = true;
+                } else {
+                    qDebug() << "Failed to save QFileIconProvider icon to:" << iconSavePath;
+                }
             }
         }
-        
+
         // フォールバック: IconExtractorを使用して実際にアイコンファイルを保存
         if (!iconLoaded) {
             IconExtractor iconExtractor;
-            
+
             // アイコンファイルのパスを生成
             QString iconSavePath = iconExtractor.generateIconPath(app.path);
             

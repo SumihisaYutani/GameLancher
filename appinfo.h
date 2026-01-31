@@ -23,7 +23,15 @@ public:
     QString description;    // 説明（任意）
     QDateTime createdAt;    // 作成日時
     QString category;       // カテゴリ名
-    
+
+    // 表示用キャッシュ（mutable: constメソッドから変更可能）
+    mutable QString cachedLastLaunchStr;
+    mutable QDateTime cachedLastLaunchTime;  // キャッシュ生成時刻
+    mutable QString cachedLaunchCountStr;
+
+    // キャッシュをクリア
+    void clearDisplayCache() const;
+
     // JSON変換
     QJsonObject toJson() const;
     void fromJson(const QJsonObject &json);

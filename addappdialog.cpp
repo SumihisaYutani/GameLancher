@@ -3,6 +3,7 @@
 #include <QDebug>
 #include <QApplication>
 #include <QStyle>
+#include <QDir>
 
 const QSize AddAppDialog::ICON_PREVIEW_SIZE = QSize(64, 64);
 const QStringList AddAppDialog::EXECUTABLE_FILTERS = {
@@ -279,7 +280,28 @@ void AddAppDialog::extractAndSetIcon()
 {
     QString path = ui->pathLineEdit->text().trimmed();
     if (!path.isEmpty() && QFileInfo::exists(path)) {
-        m_iconExtractor->extractIcon(path);
+        // アイコン保存先フォルダを設定（アプリケーションディレクトリ/icons）
+        QString iconDir = QApplication::applicationDirPath() + "/icons";
+        QDir dir(iconDir);
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+
+        // アイコン保存先パスを生成
+        QString savePath = m_iconExtractor->generateIconPath(path, iconDir);
+
+        // アイコンを抽出してPNGとして保存
+        if (m_iconExtractor->extractAndSaveIcon(path, savePath)) {
+            // 成功した場合、直接パスを設定
+            m_customIconPath = savePath;
+            QPixmap iconPixmap(savePath);
+            if (!iconPixmap.isNull()) {
+                ui->iconPreviewLabel->setPixmap(iconPixmap.scaled(ICON_PREVIEW_SIZE, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            }
+            qDebug() << "Icon saved successfully:" << savePath;
+        } else {
+            qDebug() << "Failed to save icon for:" << path;
+        }
     }
 }
 
