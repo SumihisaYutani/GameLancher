@@ -10,8 +10,8 @@
 AppIconDelegate::AppIconDelegate(QObject *parent)
     : QStyledItemDelegate(parent)
 {
-    // デフォルトアイコン（32x32のグレー四角）
-    m_defaultIcon = QImage(32, 32, QImage::Format_ARGB32);
+    // デフォルトアイコン（48x48のグレー四角）
+    m_defaultIcon = QImage(48, 48, QImage::Format_ARGB32);
     m_defaultIcon.fill(QColor(200, 200, 200));
 }
 
@@ -34,11 +34,11 @@ void AppIconDelegate::paint(QPainter *painter, const QStyleOptionViewItem &optio
         // アイコン画像を取得
         QImage icon = loadIconDirect(iconPath);
 
-        // アイコン描画位置
+        // アイコン描画位置（48x48）
         QRect iconRect = opt.rect;
-        iconRect.setWidth(32);
-        iconRect.setHeight(32);
-        iconRect.moveTop(opt.rect.top() + (opt.rect.height() - 32) / 2);
+        iconRect.setWidth(48);
+        iconRect.setHeight(48);
+        iconRect.moveTop(opt.rect.top() + (opt.rect.height() - 48) / 2);
         iconRect.moveLeft(opt.rect.left() + 4);
 
         // PNG画像を直接描画（QPixmap/QIconを経由しない）
@@ -65,7 +65,7 @@ QSize AppIconDelegate::sizeHint(const QStyleOptionViewItem &option,
 {
     Q_UNUSED(option)
     Q_UNUSED(index)
-    return QSize(200, 40);
+    return QSize(200, 56);
 }
 
 void AppIconDelegate::setIconPathGetter(std::function<QString(const QString&)> getter)
@@ -120,8 +120,8 @@ QImage AppIconDelegate::loadIconDirect(const QString &iconPath) const
     if (image.isNull()) {
         image = m_defaultIcon;
     } else {
-        // 32x32にリサイズ
-        image = image.scaled(32, 32, Qt::KeepAspectRatio, Qt::FastTransformation);
+        // 48x48にリサイズ
+        image = image.scaled(48, 48, Qt::KeepAspectRatio, Qt::FastTransformation);
     }
 
     // キャッシュに保存

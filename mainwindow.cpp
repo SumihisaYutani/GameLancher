@@ -7,6 +7,7 @@
 #include <QScrollBar>
 #include <QApplication>
 #include <QResizeEvent>
+#include <QShowEvent>
 #include <QTimer>
 #include <QProgressBar>
 #include <QLabel>
@@ -16,6 +17,11 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QSettings>
+#include <QListWidget>
+#include <QDialog>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -74,7 +80,36 @@ MainWindow::MainWindow(QWidget *parent)
 
     // 列幅変更時に保存
     connect(header, &QHeaderView::sectionResized, this, &MainWindow::onColumnResized);
-    
+
+    // 選択状態の変更を監視（モデル設定後に接続）
+    connect(ui->listTableView->selectionModel(), &QItemSelectionModel::selectionChanged,
+            this, [this](const QItemSelection &selected, const QItemSelection &deselected) {
+        // 選択解除されたアプリをセットから削除
+        for (const QModelIndex &index : deselected.indexes()) {
+            if (index.column() == 0) {
+                QString appId = m_appListModel->getAppId(index.row());
+                m_selectedAppIds.remove(appId);
+            }
+        }
+        // 新しく選択されたアプリをセットに追加
+        for (const QModelIndex &index : selected.indexes()) {
+            if (index.column() == 0) {
+                QString appId = m_appListModel->getAppId(index.row());
+                if (!appId.isEmpty()) {
+                    m_selectedAppIds.insert(appId);
+                }
+            }
+        }
+        // 削除ボタンの有効/無効
+        ui->removeAppButton->setEnabled(!m_selectedAppIds.isEmpty());
+        // 単一選択の場合はm_selectedAppIdも更新
+        if (m_selectedAppIds.size() == 1) {
+            m_selectedAppId = *m_selectedAppIds.begin();
+        } else {
+            m_selectedAppId.clear();
+        }
+    });
+
     // 初期状態をリストビューに変更（軽量表示のため）
     m_isGridView = false;
     ui->viewStackedWidget->setCurrentIndex(1);
@@ -168,13 +203,12 @@ void MainWindow::setupConnections()
     // 検索機能は削除（パフォーマンス改善のため）
     
     // リストビューイベント（QTableView）
-    connect(ui->listTableView, &QTableView::clicked, this, &MainWindow::onListItemClicked);
     connect(ui->listTableView, &QTableView::doubleClicked, this, &MainWindow::onListItemDoubleClicked);
 
     // QTableViewの設定（パフォーマンス最適化）
-    ui->listTableView->setIconSize(QSize(32, 32));
+    ui->listTableView->setIconSize(QSize(48, 48));
     ui->listTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
-    ui->listTableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    ui->listTableView->setSelectionMode(QAbstractItemView::ExtendedSelection);  // 複数選択可能
     ui->listTableView->setAlternatingRowColors(false);
     ui->listTableView->setShowGrid(false);
     ui->listTableView->setSortingEnabled(false);  // ソート無効でパフォーマンス改善
@@ -190,10 +224,10 @@ void MainWindow::setupConnections()
 
     // 行ヘッダー非表示、行高さ固定（パフォーマンス重要）
     ui->listTableView->verticalHeader()->setVisible(false);
-    ui->listTableView->verticalHeader()->setDefaultSectionSize(40);
+    ui->listTableView->verticalHeader()->setDefaultSectionSize(56);
     ui->listTableView->verticalHeader()->setSectionResizeMode(QHeaderView::Fixed);
-    ui->listTableView->verticalHeader()->setMinimumSectionSize(40);
-    ui->listTableView->verticalHeader()->setMaximumSectionSize(40);
+    ui->listTableView->verticalHeader()->setMinimumSectionSize(56);
+    ui->listTableView->verticalHeader()->setMaximumSectionSize(56);
 
     // アプリケーション管理イベント
     connect(m_appManager, &AppManager::appAdded, this, &MainWindow::onAppAdded);
@@ -357,12 +391,98 @@ void MainWindow::onAddAppButtonClicked()
 
 void MainWindow::onRemoveAppButtonClicked()
 {
-    if (m_selectedAppId.isEmpty()) {
+    // m_selectedAppIdsから全ての選択されたアプリを取得（ページをまたいだ選択に対応）
+    if (m_selectedAppIds.isEmpty()) {
         QMessageBox::information(this, "情報", "削除するアプリケーションを選択してください。");
         return;
     }
-    
-    removeApplication(m_selectedAppId);
+
+    // 選択されたアプリの情報を収集
+    QStringList appIds;
+    QStringList appPaths;
+    QStringList appNames;
+
+    for (const QString &appId : m_selectedAppIds) {
+        AppInfo *app = m_appManager->findApp(appId);
+        if (app) {
+            appIds.append(appId);
+            appPaths.append(app->path);
+            appNames.append(app->name);
+        }
+    }
+
+    if (appIds.isEmpty()) {
+        return;
+    }
+
+    // カスタムダイアログを作成
+    QDialog dialog(this);
+    dialog.setWindowTitle("削除確認");
+    dialog.setMinimumWidth(400);
+
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+
+    // ヘッダーラベル
+    QLabel *headerLabel = new QLabel(QString("%1個のアプリケーションを削除しますか？").arg(appIds.size()));
+    headerLabel->setStyleSheet("font-weight: bold; font-size: 12px;");
+    layout->addWidget(headerLabel);
+
+    // アプリ一覧リスト
+    QListWidget *listWidget = new QListWidget();
+    listWidget->setMaximumHeight(200);
+    for (const QString &name : appNames) {
+        listWidget->addItem(name);
+    }
+    layout->addWidget(listWidget);
+
+    // ボタン
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    QPushButton *deleteBtn = new QPushButton("削除");
+    QPushButton *excludeAndDeleteBtn = new QPushButton("除外リストに追加して削除");
+    QPushButton *cancelBtn = new QPushButton("キャンセル");
+
+    buttonLayout->addStretch();
+    buttonLayout->addWidget(deleteBtn);
+    buttonLayout->addWidget(excludeAndDeleteBtn);
+    buttonLayout->addWidget(cancelBtn);
+    layout->addLayout(buttonLayout);
+
+    // ボタンの接続
+    int result = 0; // 0=キャンセル, 1=削除, 2=除外リストに追加して削除
+    connect(deleteBtn, &QPushButton::clicked, [&]() { result = 1; dialog.accept(); });
+    connect(excludeAndDeleteBtn, &QPushButton::clicked, [&]() { result = 2; dialog.accept(); });
+    connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    dialog.exec();
+
+    if (result == 0) {
+        return;
+    }
+
+    bool addToExcludeList = (result == 2);
+
+    // 除外リストに追加
+    if (addToExcludeList) {
+        addPathsToExcludeList(appPaths);
+    }
+
+    // アプリを削除
+    int removedCount = 0;
+    for (const QString &appId : appIds) {
+        if (m_appManager->removeApp(appId)) {
+            m_selectedAppIds.remove(appId);  // 選択リストからも削除
+            removedCount++;
+        }
+    }
+
+    if (removedCount > 0) {
+        QString statusMsg = QString("%1個のアプリケーションを削除しました").arg(removedCount);
+        if (addToExcludeList) {
+            statusMsg += "（除外リストに追加済み）";
+        }
+        statusBar()->showMessage(statusMsg, 3000);
+        ui->removeAppButton->setEnabled(!m_selectedAppIds.isEmpty());
+    }
 }
 
 void MainWindow::onSettingsButtonClicked()
@@ -637,6 +757,49 @@ void MainWindow::removeApplication(const QString &appId)
     }
 }
 
+void MainWindow::addPathsToExcludeList(const QStringList &paths)
+{
+    QString appDir = QApplication::applicationDirPath();
+    QString excludeFilePath = QDir(appDir).filePath("exclude_list.txt");
+
+    // 既存の除外リストを読み込み
+    QStringList excludeList;
+    QFile readFile(excludeFilePath);
+    if (readFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QTextStream in(&readFile);
+        while (!in.atEnd()) {
+            QString line = in.readLine().trimmed();
+            if (!line.isEmpty()) {
+                excludeList.append(line);
+            }
+        }
+        readFile.close();
+    }
+
+    // 新しいパスを追加
+    int addedCount = 0;
+    for (const QString &path : paths) {
+        QString normalizedPath = QDir::fromNativeSeparators(path.toLower());
+        if (!excludeList.contains(normalizedPath)) {
+            excludeList.append(normalizedPath);
+            addedCount++;
+        }
+    }
+
+    // 除外リストを保存
+    if (addedCount > 0) {
+        QFile writeFile(excludeFilePath);
+        if (writeFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            QTextStream out(&writeFile);
+            for (const QString &excludePath : excludeList) {
+                out << excludePath << "\n";
+            }
+            writeFile.close();
+            qDebug() << "Added" << addedCount << "paths to exclude list";
+        }
+    }
+}
+
 void MainWindow::showAppProperties(const QString &appId)
 {
     AppInfo *app = m_appManager->findApp(appId);
@@ -817,6 +980,56 @@ void MainWindow::resizeEvent(QResizeEvent *event)
     // グリッドビューの場合のみ、リサイズに応じてレイアウトを更新
     if (m_isGridView && m_resizeTimer) {
         m_resizeTimer->start();
+    }
+
+    // リストビューの表示行数を更新
+    if (!m_isGridView) {
+        updateVisibleRowCount();
+    }
+}
+
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QMainWindow::showEvent(event);
+
+    // 初回表示時に表示行数を設定
+    static bool firstShow = true;
+    if (firstShow) {
+        firstShow = false;
+        // 少し遅延させてレイアウトが確定してから計算
+        QTimer::singleShot(100, this, &MainWindow::updateVisibleRowCount);
+    }
+}
+
+void MainWindow::updateVisibleRowCount()
+{
+    // 親ウィジェット（リストビューを含むコンテナ）の高さを取得
+    QWidget *container = ui->listTableView->parentWidget();
+    if (!container) return;
+
+    int containerHeight = container->height();
+    int headerHeight = ui->listTableView->horizontalHeader()->height();
+    int rowHeight = 56;  // 固定行高さ（48pxアイコン + 8pxパディング）
+
+    // ページネーションコントロールの高さを考慮（約40px）
+    int paginationHeight = 50;
+
+    // 利用可能な高さからヘッダーとページネーションを引いて行数を計算
+    int availableHeight = containerHeight - headerHeight - paginationHeight;
+    int visibleRows = availableHeight / rowHeight;
+
+    // 最低1行、最大100行
+    visibleRows = qBound(1, visibleRows, 100);
+
+    // テーブルビューの高さをピッタリに設定
+    int tableHeight = headerHeight + (visibleRows * rowHeight);
+    ui->listTableView->setFixedHeight(tableHeight);
+
+    // 現在の設定と異なる場合のみ更新
+    if (m_appListModel->itemsPerPage() != visibleRows) {
+        qDebug() << "Updating visible rows:" << visibleRows << "(table height:" << tableHeight << "px)";
+        m_appListModel->setItemsPerPage(visibleRows);
+        updatePageControls();
     }
 }
 
@@ -1013,16 +1226,24 @@ void MainWindow::displayCurrentPage()
 
 void MainWindow::onFirstPageClicked()
 {
+    // ページ切り替え前にシグナルをブロック（選択状態の誤削除を防ぐ）
+    ui->listTableView->selectionModel()->blockSignals(true);
     m_appListModel->setPage(0);
+    ui->listTableView->selectionModel()->blockSignals(false);
     updatePageControls();
+    restoreSelectionOnPage();
 }
 
 void MainWindow::onPrevPageClicked()
 {
     int currentPage = m_appListModel->currentPage();
     if (currentPage > 0) {
+        // ページ切り替え前にシグナルをブロック（選択状態の誤削除を防ぐ）
+        ui->listTableView->selectionModel()->blockSignals(true);
         m_appListModel->setPage(currentPage - 1);
+        ui->listTableView->selectionModel()->blockSignals(false);
         updatePageControls();
+        restoreSelectionOnPage();
     }
 }
 
@@ -1031,8 +1252,12 @@ void MainWindow::onNextPageClicked()
     int currentPage = m_appListModel->currentPage();
     int totalPages = m_appListModel->totalPages();
     if (currentPage < totalPages - 1) {
+        // ページ切り替え前にシグナルをブロック（選択状態の誤削除を防ぐ）
+        ui->listTableView->selectionModel()->blockSignals(true);
         m_appListModel->setPage(currentPage + 1);
+        ui->listTableView->selectionModel()->blockSignals(false);
         updatePageControls();
+        restoreSelectionOnPage();
     }
 }
 
@@ -1040,9 +1265,39 @@ void MainWindow::onLastPageClicked()
 {
     int totalPages = m_appListModel->totalPages();
     if (totalPages > 0) {
+        // ページ切り替え前にシグナルをブロック（選択状態の誤削除を防ぐ）
+        ui->listTableView->selectionModel()->blockSignals(true);
         m_appListModel->setPage(totalPages - 1);
+        ui->listTableView->selectionModel()->blockSignals(false);
         updatePageControls();
+        restoreSelectionOnPage();
     }
+}
+
+void MainWindow::restoreSelectionOnPage()
+{
+    // 選択変更シグナルを一時的にブロック
+    ui->listTableView->selectionModel()->blockSignals(true);
+
+    // 現在の選択をクリア
+    ui->listTableView->clearSelection();
+
+    // 現在のページに表示されているアプリの中で、選択リストに含まれているものを選択
+    int rowCount = m_appListModel->rowCount();
+    for (int row = 0; row < rowCount; ++row) {
+        QString appId = m_appListModel->getAppId(row);
+        if (m_selectedAppIds.contains(appId)) {
+            QModelIndex index = m_appListModel->index(row, 0);
+            ui->listTableView->selectionModel()->select(index,
+                QItemSelectionModel::Select | QItemSelectionModel::Rows);
+        }
+    }
+
+    // シグナルのブロックを解除
+    ui->listTableView->selectionModel()->blockSignals(false);
+
+    // 削除ボタンの状態を更新
+    ui->removeAppButton->setEnabled(!m_selectedAppIds.isEmpty());
 }
 
 // 列幅保存・復元

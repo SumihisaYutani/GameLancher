@@ -7,6 +7,7 @@
 #include <QProgressBar>
 #include <QLabel>
 #include <QPushButton>
+#include <QSet>
 #include "appinfo.h"
 #include "appmanager.h"
 #include "applauncher.h"
@@ -32,6 +33,7 @@ public:
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
 
 private slots:
     // UI イベント
@@ -87,6 +89,7 @@ private slots:
 private:
     void saveColumnWidths();
     void restoreColumnWidths();
+    void updateVisibleRowCount();
     void setupConnections();
     void loadApplications();
     void loadApplicationsAsync();
@@ -106,6 +109,7 @@ private:
     void editApplication(const QString &appId);
     void removeApplication(const QString &appId);
     void showAppProperties(const QString &appId);
+    void addPathsToExcludeList(const QStringList &paths);
     
     
     Ui::MainWindow *ui;
@@ -121,6 +125,9 @@ private:
     bool m_isGridView;
     QString m_currentFilter;
     QString m_selectedAppId;
+    QSet<QString> m_selectedAppIds;  // 複数選択を保持
+
+    void restoreSelectionOnPage();  // ページ切り替え時に選択を復元
     
     
     // 統合タイマー（パフォーマンス最適化）
