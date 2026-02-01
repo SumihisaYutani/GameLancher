@@ -28,52 +28,6 @@
       </attribute>
       <layout class="QVBoxLayout" name="optionsLayout">
        <item>
-        <widget class="QGroupBox" name="targetGroupBox">
-         <property name="title">
-          <string>検索対象</string>
-         </property>
-         <layout class="QVBoxLayout" name="targetLayout">
-          <item>
-           <widget class="QCheckBox" name="scanProgramFilesCheck">
-            <property name="text">
-             <string>Program Files フォルダ</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="scanDesktopCheck">
-            <property name="text">
-             <string>デスクトップショートカット</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="scanStartMenuCheck">
-            <property name="text">
-             <string>スタートメニュー</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="scanSteamCheck">
-            <property name="text">
-             <string>Steamゲーム</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
         <widget class="QGroupBox" name="optionsGroupBox">
          <property name="title">
           <string>検索オプション</string>

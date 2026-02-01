@@ -495,10 +495,11 @@ ScanOptions AppDiscoveryDialog::getCurrentScanOptions()
 {
     ScanOptions options;
     
-    options.scanDesktop = ui->scanDesktopCheck->isChecked();
-    options.scanStartMenu = ui->scanStartMenuCheck->isChecked();
-    options.scanProgramFiles = ui->scanProgramFilesCheck->isChecked();
-    options.scanSteam = ui->scanSteamCheck->isChecked();
+    // 検索対象はすべて有効（デフォルト値を使用）
+    options.scanDesktop = true;
+    options.scanStartMenu = true;
+    options.scanProgramFiles = true;
+    options.scanSteam = true;
     options.maxDepth = ui->maxDepthSpinBox->value();
     
     // 追加パス（複数）

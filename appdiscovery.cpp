@@ -330,13 +330,11 @@ QList<AppInfo> AppDiscovery::discoverAllApps(const ScanOptions &options)
     // ユーザー指定のパスを追加
     paths.append(options.includePaths);
     
-    // パスをスキャン
-    bool folderScanExecuted = false;
+    // パスをスキャン（シグナルは発行しない - 最後にまとめて発行）
     if (!paths.isEmpty()) {
-        QList<AppInfo> folderApps = scanFoldersInternal(paths, options, true); // シグナルを発行
+        QList<AppInfo> folderApps = scanFoldersInternal(paths, options, false);
         allApps.append(folderApps);
-        folderScanExecuted = true;
-        
+
         if (m_canceled) {
             emit scanCanceled();
             return allApps;
@@ -362,12 +360,9 @@ QList<AppInfo> AppDiscovery::discoverAllApps(const ScanOptions &options)
     
     // 重複を除去
     allApps = mergeDuplicates(allApps);
-    
-    // シグナルは一度だけ発行
-    if (!folderScanExecuted) {
-        // フォルダスキャンが実行されなかった場合のみ発行
-        emit scanFinished(allApps.size());
-    }
+
+    // スキャン完了シグナルを一度だけ発行
+    emit scanFinished(allApps.size());
     return allApps;
 }
 
@@ -432,12 +427,17 @@ QList<AppInfo> AppDiscovery::discoverSteamGames()
     
     if (commonDir.exists()) {
         QFileInfoList gameDirs = commonDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
-        
+
         for (const QFileInfo &gameDir : gameDirs) {
+            if (m_canceled) return steamApps;
+
             ScanOptions options;
             options.maxDepth = 2;
-            
-            QList<AppInfo> gameApps = scanFolder(gameDir.absoluteFilePath(), false);
+
+            // シグナルを発行しないように直接scanFolderRecursiveを使用
+            QList<AppInfo> gameApps;
+            scanFolderRecursive(gameDir.absoluteFilePath(), gameApps, options, 0);
+
             for (AppInfo &app : gameApps) {
                 if (app.category == "その他") {
                     app.category = "ゲーム";
