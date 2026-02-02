@@ -18,6 +18,7 @@
 #include <QVBoxLayout>
 #include <QSettings>
 #include <QListWidget>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QFile>
 #include <QDir>
@@ -213,6 +214,11 @@ void MainWindow::setupConnections()
     ui->listTableView->setShowGrid(false);
     ui->listTableView->setSortingEnabled(false);  // ソート無効でパフォーマンス改善
     ui->listTableView->setUpdatesEnabled(true);
+    
+    // コンテキストメニューを有効化
+    ui->listTableView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(ui->listTableView, &QTableView::customContextMenuRequested,
+            this, &MainWindow::onTableViewContextMenuRequested);
 
     // ページネーション用：スクロールバーを非表示
     ui->listTableView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -430,9 +436,31 @@ void MainWindow::onRemoveAppButtonClicked()
     // アプリ一覧リスト
     QListWidget *listWidget = new QListWidget();
     listWidget->setMaximumHeight(200);
-    for (const QString &name : appNames) {
-        listWidget->addItem(name);
+    listWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+    for (int i = 0; i < appNames.size(); ++i) {
+        QListWidgetItem *item = new QListWidgetItem(appNames[i]);
+        item->setData(Qt::UserRole, appPaths[i]); // パスを保存
+        listWidget->addItem(item);
     }
+    
+    // コンテキストメニューの接続
+    connect(listWidget, &QListWidget::customContextMenuRequested, [&](const QPoint &pos) {
+        QListWidgetItem *item = listWidget->itemAt(pos);
+        if (!item) return;
+        
+        QString appPath = item->data(Qt::UserRole).toString();
+        QFileInfo fileInfo(appPath);
+        QString folderPath = fileInfo.dir().absolutePath();
+        
+        QMenu contextMenu;
+        QAction *openFolderAction = contextMenu.addAction("フォルダを開く");
+        connect(openFolderAction, &QAction::triggered, [folderPath]() {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
+        });
+        
+        contextMenu.exec(listWidget->mapToGlobal(pos));
+    });
+    
     layout->addWidget(listWidget);
 
     // ボタン
@@ -715,12 +743,56 @@ void MainWindow::updateStatusBar()
     }
 }
 
+void MainWindow::onTableViewContextMenuRequested(const QPoint &pos)
+{
+    QModelIndex index = ui->listTableView->indexAt(pos);
+    if (!index.isValid()) return;
+    
+    QString appId = m_appListModel->getAppId(index.row());
+    if (appId.isEmpty()) return;
+    
+    showAppContextMenu(appId, ui->listTableView->mapToGlobal(pos));
+}
+
 // ヘルパー関数
 void MainWindow::showAppContextMenu(const QString &appId, const QPoint &globalPos)
 {
-    Q_UNUSED(appId)
-    Q_UNUSED(globalPos)
-    // 未使用
+    AppInfo *app = m_appManager->findApp(appId);
+    if (!app) return;
+    
+    QMenu contextMenu;
+    
+    // フォルダを開く
+    QAction *openFolderAction = contextMenu.addAction("フォルダを開く");
+    QFileInfo fileInfo(app->path);
+    QString folderPath = fileInfo.dir().absolutePath();
+    connect(openFolderAction, &QAction::triggered, [folderPath]() {
+        QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
+    });
+    
+    contextMenu.addSeparator();
+    
+    // 編集
+    QAction *editAction = contextMenu.addAction("編集");
+    connect(editAction, &QAction::triggered, [this, appId]() {
+        editApplication(appId);
+    });
+    
+    // 削除
+    QAction *removeAction = contextMenu.addAction("削除");
+    connect(removeAction, &QAction::triggered, [this, appId]() {
+        removeApplication(appId);
+    });
+    
+    contextMenu.addSeparator();
+    
+    // プロパティ
+    QAction *propertiesAction = contextMenu.addAction("プロパティ");
+    connect(propertiesAction, &QAction::triggered, [this, appId]() {
+        showAppProperties(appId);
+    });
+    
+    contextMenu.exec(globalPos);
 }
 
 void MainWindow::editApplication(const QString &appId)

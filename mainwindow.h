@@ -112,6 +112,7 @@ private:
     void addPathsToExcludeList(const QStringList &paths);
     QStringList getParentDirectories(const QStringList &paths);
     QStringList findAppsInDirectories(const QStringList &directories);
+    void onTableViewContextMenuRequested(const QPoint &pos);
     
     
     Ui::MainWindow *ui;
