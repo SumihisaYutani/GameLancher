@@ -14,7 +14,8 @@
       "Bash(\"D:\\ClaudeCode\\project\\GameLancher\\build\\Desktop_Qt_6_10_0_MinGW_64_bit-Debug\\debug\\GameLancher.exe\")",
       "Bash(taskkill:*)",
       "Bash(cmd /c:*)",
-      "Bash(GameLancher.exe)"
+      "Bash(GameLancher.exe)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

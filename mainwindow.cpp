@@ -439,18 +439,21 @@ void MainWindow::onRemoveAppButtonClicked()
     QHBoxLayout *buttonLayout = new QHBoxLayout();
     QPushButton *deleteBtn = new QPushButton("削除");
     QPushButton *excludeAndDeleteBtn = new QPushButton("除外リストに追加して削除");
+    QPushButton *excludeParentAndDeleteBtn = new QPushButton("上位フォルダも除外して削除");
     QPushButton *cancelBtn = new QPushButton("キャンセル");
 
     buttonLayout->addStretch();
     buttonLayout->addWidget(deleteBtn);
     buttonLayout->addWidget(excludeAndDeleteBtn);
+    buttonLayout->addWidget(excludeParentAndDeleteBtn);
     buttonLayout->addWidget(cancelBtn);
     layout->addLayout(buttonLayout);
 
     // ボタンの接続
-    int result = 0; // 0=キャンセル, 1=削除, 2=除外リストに追加して削除
+    int result = 0; // 0=キャンセル, 1=削除, 2=除外リストに追加して削除, 3=上位フォルダも除外して削除
     connect(deleteBtn, &QPushButton::clicked, [&]() { result = 1; dialog.accept(); });
     connect(excludeAndDeleteBtn, &QPushButton::clicked, [&]() { result = 2; dialog.accept(); });
+    connect(excludeParentAndDeleteBtn, &QPushButton::clicked, [&]() { result = 3; dialog.accept(); });
     connect(cancelBtn, &QPushButton::clicked, &dialog, &QDialog::reject);
 
     dialog.exec();
@@ -460,10 +463,27 @@ void MainWindow::onRemoveAppButtonClicked()
     }
 
     bool addToExcludeList = (result == 2);
+    bool addParentToExcludeList = (result == 3);
 
     // 除外リストに追加
     if (addToExcludeList) {
         addPathsToExcludeList(appPaths);
+    } else if (addParentToExcludeList) {
+        // 一つ上のフォルダを除外リストに追加
+        QStringList parentPaths = getParentDirectories(appPaths);
+        addPathsToExcludeList(parentPaths);
+        
+        // 同じ親フォルダにある他のアプリも削除対象に追加
+        QStringList additionalAppIds = findAppsInDirectories(parentPaths);
+        for (const QString &additionalId : additionalAppIds) {
+            if (!appIds.contains(additionalId)) {
+                appIds.append(additionalId);
+                AppInfo *additionalApp = m_appManager->findApp(additionalId);
+                if (additionalApp) {
+                    appNames.append(additionalApp->name);
+                }
+            }
+        }
     }
 
     // アプリを削除
@@ -479,6 +499,8 @@ void MainWindow::onRemoveAppButtonClicked()
         QString statusMsg = QString("%1個のアプリケーションを削除しました").arg(removedCount);
         if (addToExcludeList) {
             statusMsg += "（除外リストに追加済み）";
+        } else if (addParentToExcludeList) {
+            statusMsg += "（上位フォルダを除外リストに追加済み）";
         }
         statusBar()->showMessage(statusMsg, 3000);
         ui->removeAppButton->setEnabled(!m_selectedAppIds.isEmpty());
@@ -1365,4 +1387,43 @@ void MainWindow::restoreColumnWidths()
         }
     }
     settings.endGroup();
+}
+
+QStringList MainWindow::getParentDirectories(const QStringList &paths)
+{
+    QStringList parentPaths;
+    QSet<QString> uniqueParents;
+    
+    for (const QString &path : paths) {
+        QFileInfo fileInfo(path);
+        QString parentPath = fileInfo.dir().absolutePath();
+        QString normalizedParentPath = QDir::fromNativeSeparators(parentPath.toLower());
+        
+        if (!uniqueParents.contains(normalizedParentPath)) {
+            uniqueParents.insert(normalizedParentPath);
+            parentPaths.append(normalizedParentPath);
+        }
+    }
+    
+    return parentPaths;
+}
+
+QStringList MainWindow::findAppsInDirectories(const QStringList &directories)
+{
+    QStringList appIds;
+    QList<AppInfo> allApps = m_appManager->getApps();
+    
+    for (const AppInfo &app : allApps) {
+        QFileInfo appFileInfo(app.path);
+        QString appDirPath = QDir::fromNativeSeparators(appFileInfo.dir().absolutePath().toLower());
+        
+        for (const QString &directory : directories) {
+            if (appDirPath == directory) {
+                appIds.append(app.id);
+                break;
+            }
+        }
+    }
+    
+    return appIds;
 }

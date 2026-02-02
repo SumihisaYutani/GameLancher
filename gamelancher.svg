@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- ロケット形状のアイコン -->
+  <circle cx="32" cy="32" r="30" fill="#2D55A5" stroke="#1A3A75" stroke-width="2"/>
+  
+  <!-- ロケット本体 -->
+  <ellipse cx="32" cy="32" rx="8" ry="16" fill="#FFFFFF"/>
+  
+  <!-- ロケット先端 -->
+  <polygon points="32,16 24,24 40,24" fill="#FFC107"/>
+  
+  <!-- ロケット翼 -->
+  <polygon points="24,40 16,48 24,48" fill="#F44336"/>
+  <polygon points="40,40 48,48 40,48" fill="#F44336"/>
+  
+  <!-- 炎 -->
+  <ellipse cx="32" cy="44" rx="4" ry="8" fill="#FF5722"/>
+</svg>

@@ -57,6 +57,9 @@ void messageOutput(QtMsgType type, const QMessageLogContext &, const QString &ms
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+    
+    // アプリケーションアイコンを設定
+    a.setWindowIcon(QIcon(":/gamelancher.svg"));
 
     // カスタムメッセージハンドラーを設定
     qInstallMessageHandler(messageOutput);

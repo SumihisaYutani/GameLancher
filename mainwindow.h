@@ -110,6 +110,8 @@ private:
     void removeApplication(const QString &appId);
     void showAppProperties(const QString &appId);
     void addPathsToExcludeList(const QStringList &paths);
+    QStringList getParentDirectories(const QStringList &paths);
+    QStringList findAppsInDirectories(const QStringList &directories);
     
     
     Ui::MainWindow *ui;
