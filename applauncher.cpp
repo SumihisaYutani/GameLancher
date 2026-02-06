@@ -40,17 +40,11 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
         return false;
     }
     
-    // 既存のプロセスがあるかチェック（複数起動を許可）
-    if (m_processes.contains(app.id)) {
-        QProcess *existingProcess = m_processes[app.id];
-        if (existingProcess && existingProcess->state() != QProcess::NotRunning) {
-            qDebug() << "App" << app.name << "is already running. Allowing multiple instances.";
-            // 複数起動を許可する場合は、新しいプロセスIDを生成
-        }
-    }
+    // startDetachedでは複数起動は自動的に許可される
+    qDebug() << "Launching app:" << app.name << "with detached process";
     
-    // 新しいプロセスを作成
-    QProcess *process = createProcess(app.id);
+    // startDetached用の一時的なプロセスオブジェクトを作成（設定のためだけ）
+    QProcess *process = new QProcess();
     m_lastError.clear();
     
     // 作業ディレクトリの設定
@@ -65,14 +59,13 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
     qDebug() << "Arguments:" << arguments;
     
     try {
-        // プロセス開始（非同期・独立実行）
-        process->start(app.path, arguments);
+        // プロセス開始（独立実行 - 親プロセス終了時も継続）
+        qint64 pid = 0;
+        bool started = QProcess::startDetached(app.path, arguments, workingDir, &pid);
         
-        if (!process->waitForStarted(5000)) {
-            m_lastError = "アプリケーションの起動に失敗しました: " + process->errorString();
+        if (!started) {
+            m_lastError = "アプリケーションの起動に失敗しました";
             qWarning() << m_lastError;
-            // プロセスを削除
-            m_processes.remove(app.id);
             delete process;
             return false;
         }
@@ -81,14 +74,16 @@ bool AppLauncher::launchWithArguments(AppInfo &app, const QStringList &arguments
         app.updateLaunchInfo();
         emit launched(app.id);
         
-        qDebug() << "Successfully launched:" << app.name << "(PID:" << process->processId() << ")";
+        qDebug() << "Successfully launched:" << app.name << "(PID:" << pid << ")";
+        
+        // startDetachedを使用した場合、プロセス管理は不要
+        delete process;
+        
         return true;
         
     } catch (const std::exception &e) {
         m_lastError = "起動中に例外が発生しました: " + QString::fromStdString(e.what());
         qCritical() << m_lastError;
-        // プロセスを削除
-        m_processes.remove(app.id);
         delete process;
         return false;
     }

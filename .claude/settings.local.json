@@ -15,7 +15,8 @@
       "Bash(taskkill:*)",
       "Bash(cmd /c:*)",
       "Bash(GameLancher.exe)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(mingw32-make:*)"
     ],
     "deny": [],
     "ask": []

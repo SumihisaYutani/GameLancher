@@ -201,7 +201,9 @@ void MainWindow::setupConnections()
     connect(ui->settingsButton, &QPushButton::clicked, this, &MainWindow::onSettingsButtonClicked);
     connect(ui->viewModeButton, &QToolButton::clicked, this, &MainWindow::onViewModeButtonClicked);
     
-    // 検索機能は削除（パフォーマンス改善のため）
+    // 検索機能の接続
+    connect(ui->searchLineEdit, &QLineEdit::textChanged, this, &MainWindow::onSearchTextChanged);
+    connect(ui->filterButton, &QPushButton::clicked, this, &MainWindow::onFilterButtonClicked);
     
     // リストビューイベント（QTableView）
     connect(ui->listTableView, &QTableView::doubleClicked, this, &MainWindow::onListItemDoubleClicked);
@@ -342,13 +344,30 @@ void MainWindow::clearListView()
 
 void MainWindow::updateAppCount()
 {
+    int displayedCount = m_appList.size();
     int totalCount = m_appManager->getAppCount();
-    ui->appCountLabel->setText(QString("登録アプリ: %1個").arg(totalCount));
+    
+    if (m_currentFilter.isEmpty()) {
+        ui->appCountLabel->setText(QString("登録アプリ: %1個").arg(totalCount));
+    } else {
+        ui->appCountLabel->setText(QString("検索結果: %1個 / 全体: %2個").arg(displayedCount).arg(totalCount));
+    }
 }
 
 void MainWindow::filterApplications()
 {
-    refreshViews();
+    if (m_currentFilter.isEmpty()) {
+        // フィルターが空の場合は全てのアプリを表示
+        QList<AppInfo> apps = m_appManager->getApps();
+        m_appList = apps;
+        m_appListModel->setApps(apps);
+    } else {
+        // 検索キーワードでフィルタリング
+        QList<AppInfo> filteredApps = m_appManager->searchApps(m_currentFilter);
+        m_appList = filteredApps;
+        m_appListModel->setApps(filteredApps);
+    }
+    updatePageControls();
     updateAppCount();
 }
 
@@ -554,12 +573,16 @@ void MainWindow::onViewModeButtonClicked()
 
 void MainWindow::onSearchTextChanged()
 {
-    // リアルタイム検索は無効化済み（パフォーマンス改善のため）
+    QString searchText = ui->searchLineEdit->text().trimmed();
+    m_currentFilter = searchText;
+    filterApplications();
 }
 
 void MainWindow::onFilterButtonClicked()
 {
-    // 検索機能は削除（パフォーマンス改善のため）
+    QString searchText = ui->searchLineEdit->text().trimmed();
+    m_currentFilter = searchText;
+    filterApplications();
 }
 
 
